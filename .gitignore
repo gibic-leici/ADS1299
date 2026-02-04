@@ -40,10 +40,6 @@ Thumbs.db
 *.exe
 *.war
 
-Debug/
-*.o
-*.elf
-
 # Large media files
 *.mp4
 *.tiff
@@ -52,3 +48,12 @@ Debug/
 *.mov
 *.wmv
 
+# agregado por mi
+.vscode/
+.env
+*.env
+.venv/
+
+Debug/
+*.o
+*.elf
