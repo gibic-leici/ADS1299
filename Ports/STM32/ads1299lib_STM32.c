@@ -1,3 +1,15 @@
+/**
+ * @file ads1299lib_STM32.c
+ * @brief STM32-specific hardware interface for the ADS1299 library
+ *
+ * Implements SPI, DMA, GPIO and interrupt glue code used by the core
+ * ADS1299 driver. Designed for STM32F4xx using the LL drivers and CMSIS-RTOS.
+ *
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
+ */
+
 #include "ads1299lib.h"
 #include "ads1299lib_interface.h"
 #include "ads1299lib_STM32.h"
@@ -52,8 +64,6 @@ void ads_interface_hard_reset	(ads_t *self){
 	interface->delay(100);
 	LL_GPIO_SetOutputPin(interface->prst_port, interface->prst_pin);
 	interface->delay(1000);
-
-	self->status = ADS_STATE_MIN;
 }
 
 /**
@@ -107,19 +117,9 @@ void ads_interface_stop(ads_t *self){
 	assert(self->interface_Handler != NULL);
 
 	STM32_interface_handler_t *interface = (STM32_interface_handler_t*)self->interface_Handler;
-	assert(interface->delay != NULL);
 
 	LL_EXTI_DisableIT_0_31(interface->drdy_EXTI_line);
 	NVIC_DisableIRQ(interface->drdy_EXTI_IRQn);
-
-	interface->delay(10);
-	uint8_t buff[2];
-	buff[0] = ADS_CMD_SDATAC;
-	buff[1] = ADS_CMD_STOP;
-	ads_interface_spi_tx(self, buff, 2);
-	interface->delay(100);
-
-	self->status = ADS_STATE_STOPPED;
 }
 
 /**
@@ -130,7 +130,6 @@ void ads_interface_stop(ads_t *self){
  * 
  * @param self Pointer to ads_t structure
  * 
- * @note Updates status to adquiriendo on successful start
  */
 void ads_interface_start(ads_t *self){
 	assert(self != NULL);
@@ -138,11 +137,6 @@ void ads_interface_start(ads_t *self){
 
 	STM32_interface_handler_t *interface = (STM32_interface_handler_t*)self->interface_Handler;
 
-	uint8_t buff[2];
-	buff[0] = ADS_CMD_START;
-	buff[1] = ADS_CMD_RDATAC;
-	ads_interface_spi_tx(self, buff, 2);
-	self->status = ADS_STATE_ACQUIRING;
 	LL_EXTI_ClearFlag_0_31(interface->drdy_EXTI_line);
 	LL_EXTI_EnableIT_0_31(interface->drdy_EXTI_line);
 	NVIC_EnableIRQ(interface->drdy_EXTI_IRQn);

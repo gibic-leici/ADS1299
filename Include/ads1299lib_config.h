@@ -1,12 +1,13 @@
-/*
- * ads1299lib_config.h
+/**
+ * @file ads1299lib_config.h
+ * @brief Hardware configuration and platform-specific settings
  *
- *  Created on: 2 feb 2026
- *      Author: Usuario
+ * Define platform-specific options such as number of channels, chip-select
+ * pin, PRST pin, DRDY EXTI lines, and default SPI/DMA selections.
  *
- * DESCRIPTION: Configuration file for ADS1299 library
- * This file contains all hardware-specific pin definitions and
- * hardware port mappings for STM32F4xx microcontroller.
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
  */
 
 #ifndef INCLUDE_ADS1299LIB_CONFIG_H_

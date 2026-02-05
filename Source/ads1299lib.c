@@ -1,3 +1,15 @@
+/**
+ * @file ads1299lib.c
+ * @brief Core implementation of the ADS1299 driver library
+ *
+ * Implements initialization, configuration programming, register read/write,
+ * and basic data acquisition control for the ADS1299 ADC.
+ *
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
+ */
+
 #include "ads1299lib.h"
 #include "ads1299lib_interface.h"
 #include "freertos.h"
@@ -50,37 +62,37 @@ ads_result_t ads_init(ads_t *self, ads_init_t *init){
 		return R_FAIL;
 	}
 
-	self->config1.bits.CLK_EN = ADS_CLCK_OUTPUT_ENABLED;
-	self->config1.bits.DAISY_EN = ADS_DAISY_MODE_DISABLED;
-	self->config1.bits.DR = init->data_rate;
-	self->config1.bits.RESERVED_43 = ADS_WRITE_CONFIG1_RESERVED_43; 		//Always write 2h
-	self->config1.bits.RESERVED_7  = ADS_WRITE_CONFIG1_RESERVED_7;  		//Always write 1h
+	self->registers.config1.bits.CLK_EN = ADS_CLCK_OUTPUT_ENABLED;
+	self->registers.config1.bits.DAISY_EN = ADS_DAISY_MODE_DISABLED;
+	self->registers.config1.bits.DR = init->data_rate;
+	self->registers.config1.bits.RESERVED_43 = ADS_WRITE_CONFIG1_RESERVED_43; 		//Always write 2h
+	self->registers.config1.bits.RESERVED_7  = ADS_WRITE_CONFIG1_RESERVED_7;  		//Always write 1h
 
-	self->config2.bits.INT_CAL = 1; 		// Test signal generated internally
-	self->config2.bits.CAL_FREQ = 0; 		// 00: Pulsed at fCLK / 2^21 (approx. 1Hz)
-	self->config2.bits.CAL_AMP = 0; 		// 0: 1 × –(VREFP – VREFN) / 2400 (approx. 1.9mV)
-	self->config2.bits.RESERVED_3 = ADS_WRITE_CONFIG2_RESERVED_3;		// Always write 0h
-	self->config2.bits.RESERVED_75 = ADS_WRITE_CONFIG2_RESERVED_75;		// Always write 6h
+	self->registers.config2.bits.INT_CAL = 1; 		// Test signal generated internally
+	self->registers.config2.bits.CAL_FREQ = 0; 		// 00: Pulsed at fCLK / 2^21 (approx. 1Hz)
+	self->registers.config2.bits.CAL_AMP = 0; 		// 0: 1 × –(VREFP – VREFN) / 2400 (approx. 1.9mV)
+	self->registers.config2.bits.RESERVED_3 = ADS_WRITE_CONFIG2_RESERVED_3;		// Always write 0h
+	self->registers.config2.bits.RESERVED_75 = ADS_WRITE_CONFIG2_RESERVED_75;		// Always write 6h
 
-	self->config3.bits.BIAS_STAT = 0;		// Read-only
-	self->config3.bits.BIAS_LOFF_SENS = 0; 	// 0: BIAS sense is disabled
-	self->config3.bits.PD_BIAS = 1; 		// 1: BIAS buffer is enabled
-	self->config3.bits.BIASREF_INT = 1;		// 1: BIASREF signal (AVDD + AVSS) / 2 generated internally
-	self->config3.bits.BIAS_MEAS = 0; 		// 0: Open
-	self->config3.bits.RESERVED_65 = ADS_WRITE_CONFIG3_RESERVED_65;		// Always write 3h
-	self->config3.bits.PD_REFBUF = 1;		// 1: Enable internal reference buffer
+	self->registers.config3.bits.BIAS_STAT = 0;		// Read-only
+	self->registers.config3.bits.BIAS_LOFF_SENS = 0; 	// 0: BIAS sense is disabled
+	self->registers.config3.bits.PD_BIAS = 1; 		// 1: BIAS buffer is enabled
+	self->registers.config3.bits.BIASREF_INT = 1;		// 1: BIASREF signal (AVDD + AVSS) / 2 generated internally
+	self->registers.config3.bits.BIAS_MEAS = 0; 		// 0: Open
+	self->registers.config3.bits.RESERVED_65 = ADS_WRITE_CONFIG3_RESERVED_65;		// Always write 3h
+	self->registers.config3.bits.PD_REFBUF = 1;		// 1: Enable internal reference buffer
 
 
-	self->config4.bits.RESERVED_0 = ADS_WRITE_CONFIG4_RESERVED_0; 		// Always write 0h
-	self->config4.bits.PD_LOFF_COMP = 0; 		// 0: Lead-off comparators disabled
-	self->config4.bits.RESERVED_2 = ADS_WRITE_CONFIG4_RESERVED_2; 		// Always write 0h
-	self->config4.bits.SINGLE_SHOT = 0;		// 0: Continuous conversion mode
-	self->config4.bits.RESERVED_47 = ADS_WRITE_CONFIG4_RESERVED_47;		// Always write 0h
+	self->registers.config4.bits.RESERVED_0 = ADS_WRITE_CONFIG4_RESERVED_0; 		// Always write 0h
+	self->registers.config4.bits.PD_LOFF_COMP = 0; 		// 0: Lead-off comparators disabled
+	self->registers.config4.bits.RESERVED_2 = ADS_WRITE_CONFIG4_RESERVED_2; 		// Always write 0h
+	self->registers.config4.bits.SINGLE_SHOT = 0;		// 0: Continuous conversion mode
+	self->registers.config4.bits.RESERVED_47 = ADS_WRITE_CONFIG4_RESERVED_47;		// Always write 0h
 
 	for(int i=0;i<self->num_channels;i++){
-		self->chnset[i].bits.PD = init->channel_config[i].enabled;
-		self->chnset[i].bits.GAIN = init->channel_config[i].gain;
-		self->chnset[i].bits.MUX = init->channel_config[i].mode;
+		self->registers.chnset[i].bits.PD = init->channel_config[i].enabled;
+		self->registers.chnset[i].bits.GAIN = init->channel_config[i].gain;
+		self->registers.chnset[i].bits.MUX = init->channel_config[i].mode;
 	}
 
 	ads_interface_hard_reset(self);
@@ -140,50 +152,37 @@ void ads_reset(ads_t *self){
 	self->status = ADS_STATE_MIN;
 }
 
+
+
+/**
+ * @brief Set ADS1299 configuration
+ *
+ * Writes the configuration registers CONFIG1 through CONFIG4 and the
+ * per-channel settings (CHxSET) according to the values stored in the
+ * internal `self->registers` structure.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @return ads_result_t R_OK if the write and verification succeed,
+ *         R_FAIL if an error occurs while writing or verifying registers
+ *
+ * @note The function verifies the written values by reading them back using
+ *       `ads_verify_config`. It updates `self->status` to ADS_STATE_STOPPED
+ *       or ADS_STATE_FAIL depending on the result.
+ * @warning This function forces the device into the stopped state. Call it
+ *          only when the device is stopped or when forcing a stop is
+ *          acceptable.
+ */
 ads_result_t ads_set_config(ads_t *self){
 
 	assert(self != NULL);
 
-	uint8_t buff[10];
-
-	ads_interface_stop(self);
-
-	// Write CONFIG1 register
-	buff[0] = ADS_CMD_WREG+dirCONFIG1;
-	buff[1] = 0x00;
-	buff[2] = self->config1.byte;
-	ads_interface_spi_tx(self,buff,3);
-	ads_interface_delay(self,10);
-
-	// Write CONFIG2 register
-	buff[0] = ADS_CMD_WREG+dirCONFIG2;
-	buff[1] = 0x00;
-	buff[2] = self->config2.byte;
-	ads_interface_spi_tx(self,buff,3);
-	ads_interface_delay(self,10);
-
-	// Write CONFIG3 register
-	buff[0] = ADS_CMD_WREG+dirCONFIG3;
-	buff[1] = 0x00;
-	buff[2] = self->config3.byte;
-	ads_interface_spi_tx(self,buff,3);
-	ads_interface_delay(self,10);
-
-	// Write CHxSET registers (per channel configuration)
-	buff[0] = ADS_CMD_WREG+dirCHxSET;
-	buff[1] = self->num_channels-1u;
+	ads_write_reg(self, ADS_CONFIG1, self->registers.config1.byte);
+	ads_write_reg(self, ADS_CONFIG2, self->registers.config2.byte);
+	ads_write_reg(self, ADS_CONFIG3, self->registers.config3.byte);
 	for(int i=0;i<self->num_channels;i++){
-		buff[i+2] = self->chnset[i].byte;
+		ads_write_reg(self, ADS_CH1SET+i, self->registers.chnset[i].byte);
 	}
-	ads_interface_spi_tx(self,buff,self->num_channels + 2u);
-	ads_interface_delay(self,10);
-
-	// Write CONFIG4 register
-	buff[0] = ADS_CMD_WREG+dirCONFIG4;
-	buff[1] = 0x00;
-	buff[2] = self->config4.byte;
-	ads_interface_spi_tx(self,buff,3);
-	ads_interface_delay(self,10);
+	ads_write_reg(self, ADS_CONFIG4, self->registers.config4.byte);
 
 	// Verify configuration was written correctly
 	if(ads_verify_config(self) == R_OK){
@@ -208,76 +207,44 @@ ads_result_t ads_set_config(ads_t *self){
  * @param self Pointer to ads_t structure
  * @return ads_result_t R_OK if all registers match, R_FAIL if any mismatch
  * 
- * @note Updates the status field to falla if verification fails
+ * @note Updates the `self->status` field to ADS_STATE_FAIL if verification fails
  */
 ads_result_t ads_verify_config(ads_t *self){
 
 	assert(self != NULL);
 
 	ads_result_t error = R_OK;
-	uint8_t buff[10];
+	uint8_t buff[1];
 
 	// Verify CONFIG1 register
-	buff[0] = ADS_CMD_RREG+dirCONFIG1;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
-
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
-
-	if(	self->config1.byte != buff[0] ){
+	buff[0] = ads_read_reg(self, ADS_CONFIG1);
+	if(	self->registers.config1.byte != buff[0] ){
 		error = R_FAIL;
 	}
+
 	// Verify CONFIG2 register
-	buff[0] = ADS_CMD_RREG+dirCONFIG2;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
-
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
-
-	if(	self->config2.byte != buff[0] ){
+	buff[0] = ads_read_reg(self, ADS_CONFIG2);
+	if(	self->registers.config2.byte != buff[0] ){
 		error = R_FAIL;
 	}
+
 	// Verify CONFIG3 register
-	buff[0] = ADS_CMD_RREG+dirCONFIG3;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
-
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
-
-	if(	self->config3.byte != buff[0] ){
+	buff[0] = ads_read_reg(self, ADS_CONFIG3);
+	if(	self->registers.config3.byte != buff[0] ){
 		error = R_FAIL;
 	}
+
 	// Verify CHxSET registers
 	for(int i=0;i<self->num_channels;i++){
-
-		buff[0] = ADS_CMD_RREG+dirCHxSET+i;
-		buff[1] = 0x00;
-		ads_interface_spi_tx(self, buff, 2);
-		ads_interface_delay(self, 10);
-
-		buff[0]=0x00;
-		ads_interface_spi_rx(self,buff,1);
-
-		if(	self->chnset[i].byte != buff[0] ){
+		buff[0] = ads_read_reg(self, (ADS_CH1SET + i));
+		if(	self->registers.chnset[i].byte != buff[0] ){
 			error = R_FAIL;
 		}
 	}
+
 	// Verify CONFIG4 register
-	buff[0] = ADS_CMD_RREG+dirCONFIG4;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
-
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
-
-	if(	self->config4.byte != buff[0] ){
+	buff[0] = ads_read_reg(self, ADS_CONFIG4);
+	if(	self->registers.config4.byte != buff[0] ){
 		error = R_FAIL;
 	}
 
@@ -329,7 +296,7 @@ ads_result_t ads_set_data_rate(ads_t *self, ads_datarate_t tasa){
 	assert(ADS_DR_MIN <= tasa && tasa <= ADS_DR_MAX);
 	assert(self != NULL);
 
-	self->config1.bits.DR = tasa;
+	self->registers.config1.bits.DR = tasa;
 
 	ads_interface_stop(self);
 
@@ -357,7 +324,7 @@ ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *ganancias){
 	}
 	
 	for(int i=0;i<self->num_channels;i++){
-		self->chnset[i].bits.GAIN = ganancias[i];
+		self->registers.chnset[i].bits.GAIN = ganancias[i];
 	}
 	
 	ads_interface_stop(self);
@@ -386,7 +353,7 @@ ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* canalactivo)
 	}
 
 	for(int i=0;i<self->num_channels;i++){
-		self->chnset[i].bits.PD = canalactivo[i];
+		self->registers.chnset[i].bits.PD = canalactivo[i];
 	}
 
 	ads_interface_stop(self);
@@ -409,9 +376,9 @@ ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* canalactivo)
  * 
  * @param self Pointer to ads_t structure
  * @param canalmodo Array of channel modes (one per channel)
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ * @return ads_result_t R_OK on success, R_FAIL on error
  * 
- * @warning Device must be stopped before calling this function
+ * @warning The device will be stopped while applying the new configuration
  */
 ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * canalmodo){
 
@@ -421,7 +388,7 @@ ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * canalmodo){
 	}
 
 	for(int i=0;i<self->num_channels;i++){
-		self->chnset[i].bits.MUX = canalmodo[i];
+		self->registers.chnset[i].bits.MUX = canalmodo[i];
 	}
 
 	ads_interface_stop(self);
@@ -443,19 +410,13 @@ ads_datarate_t ads_get_data_rate(ads_t *self){
 
 	assert(self != NULL);
 
-	ads_interface_stop(self);
+	uint8_t config1;
 
-	uint8_t buff[2];
-	buff[0] = ADS_CMD_RREG+dirCONFIG1;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
+	config1 = ads_read_reg(self, ADS_CONFIG1);
 
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
-	self->config1.byte = buff[0];
+	self->registers.config1.byte = config1;
 
-	return (ads_datarate_t)(self->config1.bits.DR);
+	return (ads_datarate_t)(self->registers.config1.bits.DR);
 }
 
 
@@ -474,19 +435,14 @@ void ads_get_ch_mode(ads_t *self, ads_channel_mode_t *modos)
 	assert(self != NULL);
 	assert(modos != NULL);
 
-	uint8_t buff[2];
-
-	ads_interface_stop(self);
 	for(int i=0;i<self->num_channels;i++){
-		buff[0] = ADS_CMD_RREG+dirCHxSET+i;
-		buff[1] = 0;
-		ads_interface_spi_tx(self, buff, 2);
-		ads_interface_delay(self, 10);
+		uint8_t chxset;
 
-		buff[0]=0;
-		ads_interface_spi_rx(self,buff,1);
-		self->chnset[i].byte = buff[0];
-		modos[i] = self->chnset[i].bits.MUX;
+		chxset = ads_read_reg(self, (ADS_CH1SET + i));
+
+		self->registers.chnset[i].byte = chxset;
+
+		modos[i] = self->registers.chnset[i].bits.MUX;
 	}
 }
 
@@ -504,19 +460,14 @@ void ads_get_ch_gain(ads_t *self, ads_gain_t *ganancias)
 	assert(self != NULL);
 	assert(ganancias != NULL);
 
-	uint8_t buff[2];
-
-	ads_interface_stop(self);
 	for(int i=0;i<self->num_channels;i++){
-		buff[0] = ADS_CMD_RREG+dirCHxSET+i;
-		buff[1] = 0;
-		ads_interface_spi_tx(self, buff, 2);
-		ads_interface_delay(self, 10);
+		uint8_t chxset;
 
-		buff[0]=0;
-		ads_interface_spi_rx(self,buff,1);
-		self->chnset[i].byte = buff[0];
-		ganancias[i] = self->chnset[i].bits.GAIN;
+		chxset = ads_read_reg(self, (ADS_CH1SET + i));
+
+		self->registers.chnset[i].byte = chxset;
+
+		ganancias[i] = self->registers.chnset[i].bits.GAIN;
 	}
 }
 
@@ -536,80 +487,110 @@ ADS_ID_reg_t ads_get_ID(ads_t *self){
 
 	assert(self != NULL);
 
+	uint8_t id;
+
+	id = ads_read_reg(self, ADS_ID);
+
+	self->registers.id.byte = id;
+
+	return self->registers.id;
+}
+
+
+/**
+ * @brief Write ADS1299 register
+ *
+ * Writes a single register on the ADS1299 via SPI using the WREG command.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param reg Register enumeration (address) to write
+ * @param value Value to write into the register
+ * @return void
+ *
+ * @note This function checks for read-only registers (e.g., ID, LOFF_STATP,
+ *       LOFF_STATN) and for channel-address mismatches. If the register is
+ *       read-only or invalid for the configured number of channels, the
+ *       function returns without performing any write.
+ *       It calls `ads_interface_stop` before performing SPI access.
+ * @warning This function may interrupt ongoing conversions because it forces
+ *          the SPI interface to stop. Ensure the device is stopped or that
+ *          interruption is acceptable before calling.
+ */
+void ads_write_reg (ads_t *self, ads_regs_enum_t reg, uint8_t value){
+	assert(ADS_REG_MIN <= reg && reg <= ADS_REG_MAX);
+	assert(self != NULL);
+
+	//if register is read-only
+	if(reg==ADS_ID || reg==ADS_LOFF_STATN || reg==ADS_LOFF_STATP){
+		return;
+	}
+	//if channel number is wrong
+	if(self->num_channels==4 && reg>=ADS_CH5SET && reg<=ADS_CH8SET){
+		return;
+	}
+	if(self->num_channels==6 && reg>=ADS_CH7SET && reg<=ADS_CH8SET){
+		return;
+	}
+
+	uint8_t buff[3];
+
+	ads_interface_stop(self);
+
+	// Write register
+	buff[0] = ADS_CMD_WREG+(uint8_t)reg; //reg number in enum is equal to address in device
+	buff[1] = 0x00;
+	buff[2] = value;
+	ads_interface_spi_tx(self,buff,3);
+	ads_interface_delay(self,10);
+
+} 
+
+/**
+ * @brief Read ADS1299 register
+ *
+ * Reads a single register from the ADS1299 via SPI using the RREG command
+ * and returns its value.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param reg Register enumeration (address) to read
+ * @return uint8_t The value read from the register. For invalid channel
+ *         addresses (based on configured channel count) the function
+ *         returns 0xFF.
+ *
+ * @note This function calls `ads_interface_stop` before performing SPI access
+ *       and will return 0xFF for out-of-range channel registers.
+ * @warning This function may interrupt ongoing conversions because it forces
+ *          the SPI interface to stop. Ensure the device is stopped or that
+ *          interruption is acceptable before calling.
+ */
+uint8_t ads_read_reg(ads_t *self, ads_regs_enum_t reg){
+	assert(ADS_REG_MIN <= reg && reg <= ADS_REG_MAX);
+	assert(self != NULL);
+
+	//if channel number is wrong
+	if(self->num_channels==4 && reg>=ADS_CH5SET && reg<=ADS_CH8SET){
+		return 0xFF;
+	}
+	if(self->num_channels==6 && reg>=ADS_CH7SET && reg<=ADS_CH8SET){
+		return 0xFF;
+	}
+
 	ads_interface_stop(self);
 
 	uint8_t buff[2];
-	buff[0] = ADS_CMD_RREG+dirID;
+	buff[0] = ADS_CMD_RREG+(uint8_t)reg;
 	buff[1] = 0x00;
 	ads_interface_spi_tx(self, buff, 2);
 	ads_interface_delay(self, 10);
 
 	buff[0]=0x00;
 	ads_interface_spi_rx(self,buff,1);
-	self->id.byte = buff[0];
 
-	return self->id;
+	return buff[0];
 }
 
+
 ///////////////////////////////////////////////////////////////
-
-
-
-
-
-
-
-
-//enum resultado ADS_visualizar_registros(uint8_t * arr){
-//
-//		int i;
-//
-//		txBuf[0] = ADS_CMD_RREG+dirID;
-//		txBuf[1] = 0x03;
-//		ADS_spi_tx(txBuf,2);
-//		ADS_Delay_ms(10);
-//		rxBuf[0]=rxBuf[1]=rxBuf[2]=rxBuf[3]=0x00;
-//		ADS_spi_rx(rxBuf,4);
-//
-//		*(arr+0) =  rxBuf[0];
-//		*(arr+1) =  rxBuf[1];
-//		*(arr+2) =  rxBuf[2];
-//		*(arr+3) =  rxBuf[3];
-//
-//		txBuf[0] = ADS_CMD_RREG+dirCHxSET;
-//    txBuf[1] = (char)(ADS_N_CH-1);
-//    ADS_spi_tx(txBuf,2);
-//		ADS_Delay_ms(10);
-//		rxBuf[0]=rxBuf[1]=rxBuf[2]=rxBuf[3]=0x00;
-//		ADS_spi_rx(rxBuf,ADS_N_CH);
-//
-//		for(i=0;i<ADS_N_CH;i++){
-//			*(arr+4+i)=rxBuf[i];
-//		}
-//
-//		txBuf[0] = ADS_CMD_RREG+dirCONFIG4;
-//		txBuf[1] = 0x00;
-//		ADS_spi_tx(txBuf,2);
-//		ADS_Delay_ms(10);
-//		rxBuf[0]=0x00;
-//		ADS_spi_rx(rxBuf,1);
-//
-//		*(arr+8)= rxBuf[0];
-//
-//
-//		//estado_lib_ads = falla;
-//		if(ADS_verificar_configuracion() == R_OK){
-//			//estado_lib_ads = conf_programada;
-//		}
-//		else{
-//			//estado_lib_ads = falla;
-//			return R_FAIL;
-//		}
-//
-//		return R_OK;
-//}
-
-
 
 
 

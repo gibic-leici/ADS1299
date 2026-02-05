@@ -1,8 +1,13 @@
-/*
- * ads1299lib_regs.h
+/**
+ * @file ads1299lib_regs.h
+ * @brief Register definitions and bitfield types for ADS1299
  *
- *  Created on: 2 feb 2026
- *      Author: Usuario
+ * Contains register addresses, typed unions and bitfield structures
+ * representing the ADS1299 register map (see datasheet section 9).
+ *
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
  */
 
 #ifndef INCLUDE_ADS1299LIB_REGS_H_
@@ -354,12 +359,59 @@ typedef union{
 	uint8_t byte;
 }ADS_CONFIG4_reg_t;
 
-struct ads1299regs_t{
-	uint8_t CONFIG1;
-	uint8_t CONFIG2;
-	uint8_t CONFIG3;
-	uint8_t CHxSET[ADS_CONFIG_N_CH];
-	uint8_t CONFIG4;
-};
+typedef struct {
+	// Read Only ID Registers
+	ADS_ID_reg_t id;
+	// Global Settings Across Channels
+	ADS_CONFIG1_reg_t config1;
+	ADS_CONFIG2_reg_t config2;
+	ADS_CONFIG3_reg_t config3;
+	ADS_LOFF_reg_t loff;
+	// Channel-Specific Settings
+	ADS_CHnSET_reg_t chnset[8];
+	ADS_BIAS_SENSP_reg_t bias_sensp;
+	ADS_BIAS_SENSN_reg_t bias_sensn;
+	ADS_LOFF_SENSP_reg_t loff_sensp;
+	ADS_LOFF_SENSN_reg_t loff_sensn;
+	ADS_LOFF_FLIP_reg_t loff_flip;
+	// Lead-Off Status Registers (Read-Only Registers)
+	ADS_LOFF_STATP_reg_t loff_statp;
+	ADS_LOFF_STATN_reg_t loff_statn;
+	// GPIO and OTHER Registers
+	ADS_GPIO_reg_t gpio;
+	ADS_MISC1_reg_t misc1;
+	ADS_MISC2_reg_t misc2;
+	ADS_CONFIG4_reg_t config4;
+}ads_regs_t;
+
+typedef enum {
+	ADS_REG_MIN,
+	ADS_ID=ADS_REG_MIN,
+	ADS_CONFIG1,
+	ADS_CONFIG2,
+	ADS_CONFIG3,
+	ADS_LOFF,
+	ADS_CH1SET,
+	ADS_CH2SET,
+	ADS_CH3SET,
+	ADS_CH4SET,
+	ADS_CH5SET,
+	ADS_CH6SET,
+	ADS_CH7SET,
+	ADS_CH8SET,
+	ADS_BIAS_SENSP,
+	ADS_BIAS_SENSN,
+	ADS_LOFF_SENSP,
+	ADS_LOFF_SENSN,
+	ADS_LOFF_FLIP,
+	ADS_LOFF_STATP,
+	ADS_LOFF_STATN,
+	ADS_GPIO,
+	ADS_MISC1,
+	ADS_MISC2,
+	ADS_CONFIG4,
+	ADS_REG_MAX=ADS_CONFIG4,
+}ads_regs_enum_t;
+
 
 #endif /* INCLUDE_ADS1299LIB_REGS_H_ */

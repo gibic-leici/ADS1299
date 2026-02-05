@@ -616,20 +616,4 @@ printf("DRDY pin state: %d\n", LL_GPIO_IsInputPinSet(GPIOB, GPIO_PIN_1));
 ```
 
 ---
-
-## Summary Checklist
-
-- [ ] Read entire ADS1299 datasheet section 9 (register descriptions)
-- [ ] Configure STM32CubeMX with SPI and EXTI for DRDY
-- [ ] Implement `delay_function(uint32_t millis)`
-- [ ] Test basic initialization sequence
-- [ ] Verify register readback in `ads_verify_config()`
-- [ ] Test each configuration function individually
-- [ ] Implement DRDY interrupt handler
-- [ ] Test continuous data acquisition
-- [ ] Validate ADC output against known signals
-- [ ] Profile performance and optimize as needed
-
----
-
 **For more information, refer to the ADS1299 datasheet and STM32F4 reference manual.**

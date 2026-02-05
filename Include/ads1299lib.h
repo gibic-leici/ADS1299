@@ -1,24 +1,18 @@
 #ifndef _ADS1299LIB_H
 #define _ADS1299LIB_H
 
-/*****************************************************
-*           ADS1299 LIBRARY V1  19/07/2019
-*           
-* Library for using the ADS1299 from any microcontroller.
-* 
-* INITIALIZATION STEPS:
-*   1. Implement the interface functions:
-*      - ads_interface_spi_tx() - SPI transmission
-*      - ads_interface_spi_rx() - SPI reception
-*      - ads_interface_hard_reset() - RESET/PWDN pin control
-*      - ads_interface_delay() - Delay function
-*   2. Call ads_init() with proper configuration
-*   3. Monitor library state using ads1299 status field
-*   4. Use configuration and acquisition control functions
-*
-* AUTHOR: Usuario
-* LAST MODIFICATION: February 4, 2026
-*****************************************************/
+/**
+ * @file ads1299lib.h
+ * @brief Public API definitions and types for the ADS1299 driver
+ *
+ * Library for using the ADS1299 from any microcontroller. Users must
+ * implement the platform interface and call `ads_init()` with a valid
+ * configuration. See `ads1299lib_config.h` for hardware-specific settings.
+ *
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
+ */
 #include <stdint.h>
 #include "ads1299lib_config.h"
 #include "ads1299lib_regs.h"
@@ -74,28 +68,7 @@ typedef struct {
 	ads_state_t status;
 
 	// REGISTER COPIES
-	// Read Only ID Registers
-	ADS_ID_reg_t id;
-	// Global Settings Across Channels
-	ADS_CONFIG1_reg_t config1;
-	ADS_CONFIG2_reg_t config2;
-	ADS_CONFIG3_reg_t config3;
-	ADS_LOFF_reg_t loff;
-	// Channel-Specific Settings
-	ADS_CHnSET_reg_t chnset[ADS_MAX_CHANNELS];
-	ADS_BIAS_SENSP_reg_t bias_sensp;
-	ADS_BIAS_SENSN_reg_t bias_sensn;
-	ADS_LOFF_SENSP_reg_t loff_sensp;
-	ADS_LOFF_SENSN_reg_t loff_sensn;
-	ADS_LOFF_FLIP_reg_t loff_flip;
-	// Lead-Off Status Registers (Read-Only Registers)
-	ADS_LOFF_STATP_reg_t loff_statp;
-	ADS_LOFF_STATN_reg_t loff_statn;
-	// GPIO and OTHER Registers
-	ADS_GPIO_reg_t gpio;
-	ADS_MISC1_reg_t misc1;
-	ADS_MISC2_reg_t misc2;
-	ADS_CONFIG4_reg_t config4;
+	ads_regs_t registers;
 
 	// HARDWARE LINK
 	// The library user should associate this pointer with a structure
@@ -124,7 +97,7 @@ typedef struct {
 
 
 
-/* 4 Canales */
+/* 4 Channels */
 #define ADS_N_CH ADS_CONFIG_N_CH
 
 #define ADS_STATUS_BYTES 3
@@ -188,28 +161,49 @@ typedef struct{
 /**********************************************************/
 
 /**
- * @brief Initialize the ADS1299 chip with specified configuration
- * @param self Pointer to ads_t structure
- * @param init Pointer to initialization configuration structure
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ * @brief Initialize the ADS1299 chip with the specified configuration
+ *
+ * Initializes the hardware interface, configures global and per-channel
+ * settings, performs hardware reset and verifies register programming.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param init Pointer to the initialization configuration structure
+ * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @note On success `self->status` will be set to ADS_STATE_STOPPED; on
+ *       failure it will be set to ADS_STATE_FAIL.
  */
 ads_result_t ads_init(ads_t *self, ads_init_t *init);
 
 /**
  * @brief Start continuous ADC conversion
- * @param self Pointer to ads_t structure
+ *
+ * Sends the START command to the ADS1299 to begin continuous conversions
+ * on enabled channels using the hardware interface.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @note Uses the hardware START command via the interface handler.
  */
 void ads_start(ads_t *self);
 
 /**
  * @brief Stop ADC conversion
- * @param self Pointer to ads_t structure
+ *
+ * Sends the STOP command to the ADS1299 to halt conversions and put the
+ * device in standby mode.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @note Uses the hardware STOP command via the interface handler.
  */
 void ads_stop(ads_t *self);
 
 /**
- * @brief Reset the ADS1299 chip (software reset)
- * @param self Pointer to ads_t structure
+ * @brief Perform a software reset of the ADS1299
+ *
+ * Sends the RESET command (soft reset) to reinitialize the serial interface
+ * and reset all device registers to their default values.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @note Requires a functional SPI interface.
  */
 void ads_reset(ads_t *self);
 
@@ -219,64 +213,154 @@ void ads_reset(ads_t *self);
 *******************************/
 
 /**
- * @brief Set channel input multiplexer mode (Normal, Short, Bias, etc.)
- * @param self Pointer to ads_t structure
- * @param canalmodo Array of channel modes
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ * @brief Set input multiplexer mode for each channel
+ *
+ * Selects the input signal connected to each channel's input (Normal,
+ * Short, Bias, VCC, Temperature, Test, BIAS+, BIAS-).
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param canalmodo Array of channel modes (one per configured channel)
+ * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @warning This function forces the device into the stopped state when
+ *          applying the configuration. Ensure stopping conversions is
+ *          acceptable before calling.
  */
 ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * canalmodo);
 
 /**
  * @brief Enable or disable individual channels
- * @param self Pointer to ads_t structure
- * @param canalactivo Array indicating enabled (0) or disabled (1) state for each channel
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ *
+ * Controls the power-down state for each channel independently. Use
+ * ADS_CHANNEL_ENABLED (0) to enable or ADS_CHANNEL_DISABLED (1) to power
+ * down the channel.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param canalactivo Array of enable/disable flags (one per configured channel)
+ * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @warning This function forces the device into the stopped state when
+ *          applying the configuration. Ensure stopping conversions is
+ *          acceptable before calling.
  */
 ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* canalactivo);
 
 /**
- * @brief Set gain for each channel
- * @param self Pointer to ads_t structure
- * @param ganancias Array of gain values for each channel
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ * @brief Set programmable gain amplifier (PGA) for each channel
+ *
+ * Possible gains: 1, 2, 4, 6, 8, 12, 24 (encoded as enumeration values).
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param ganancias Array of gain values (one per configured channel)
+ * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @warning This function forces the device into the stopped state when
+ *          applying the configuration. Ensure stopping conversions is
+ *          acceptable before calling.
  */
 ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *ganancias);
 
 /**
- * @brief Set data sampling rate
- * @param self Pointer to ads_t structure
- * @param tasa Data rate enumeration value
- * @return ads_result_t R_OK if successful, R_FAIL otherwise
+ * @brief Set data sampling rate for all channels
+ *
+ * Changes the ADC sampling rate. The device is stopped while the new rate
+ * is applied.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param tasa Data rate enumeration value (ADS_DR_16KSPS .. ADS_DR_250SPS)
+ * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @warning This function forces the device into the stopped state when
+ *          applying the configuration. Ensure stopping conversions is
+ *          acceptable before calling.
  */
 ads_result_t ads_set_data_rate(ads_t *self, ads_datarate_t tasa);
 
 /**
- * @brief Get current channel modes
- * @param self Pointer to ads_t structure
- * @param modos Output array for channel modes
+ * @brief Get input multiplexer mode for all channels
+ *
+ * Reads the current MUX settings from all CHxSET registers and returns the
+ * mode for each channel.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param modos Output array for channel modes (one per configured channel)
+ * @note This function performs SPI reads and may stop ongoing conversions.
+ * @warning The function may interrupt conversions since it stops the SPI
+ *          interface during register reads. Ensure this is acceptable.
  */
 void ads_get_ch_mode(ads_t *self, ads_channel_mode_t *modos);
 
 /**
- * @brief Get current sampling data rate
- * @param self Pointer to ads_t structure
- * @return ads_datarate_t Current data rate
+ * @brief Get current data sampling rate
+ *
+ * Reads back the CONFIG1 register to determine the device's configured
+ * data rate.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @return ads_datarate_t Current data rate (enumeration value)
+ * @note Performs an SPI read; may interrupt conversions.
  */
 ads_datarate_t ads_get_data_rate(ads_t *self);
 
 /**
  * @brief Get gain settings for all channels
- * @param self Pointer to ads_t structure
- * @param ganancias Output array for gain values
+ *
+ * Reads the current GAIN settings from all CHxSET registers and returns the
+ * programmed gain for each channel.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param ganancias Output array for gain values (one per configured channel)
+ * @note This function performs SPI reads and may stop ongoing conversions.
  */
 void ads_get_ch_gain(ads_t *self, ads_gain_t *ganancias);
 
 /**
  * @brief Read device ID register
- * @param self Pointer to ads_t structure
- * @return ADS_ID_reg_t Device ID register value
+ *
+ * Reads the ID register from the ADS1299 to verify device presence and to
+ * obtain the number of channels and revision ID.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @return ADS_ID_reg_t Device ID register value containing DEV_ID, NU_CH and REV_ID
+ * @note Performs an SPI read; may interrupt conversions.
  */
 ADS_ID_reg_t ads_get_ID(ads_t *self);
+
+/**
+ * @brief Write ADS1299 register
+ *
+ * Writes a single register on the ADS1299 via SPI using the WREG command.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param reg Register enumeration (address) to write
+ * @param value Value to write into the register
+ * @return void
+ *
+ * @note Checks for read-only registers and for channel-address mismatches.
+ *       This function calls `ads_interface_stop` before SPI access.
+ * @warning This function may interrupt ongoing conversions because it forces
+ *          the SPI interface to stop. Ensure the device is stopped or that
+ *          interruption is acceptable before calling.
+ */
+void ads_write_reg (ads_t *self, ads_regs_enum_t reg, uint8_t value);
+
+/**
+ * @brief Read ADS1299 register
+ *
+ * Reads a single register from the ADS1299 via SPI using the RREG command
+ * and returns its value.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param reg Register enumeration (address) to read
+ * @return uint8_t The value read from the register. For invalid channel
+ *         addresses (based on configured channel count) the function
+ *         returns 0xFF.
+ *
+ * @note Calls `ads_interface_stop` before performing SPI access and will
+ *       return 0xFF for out-of-range channel registers.
+ * @warning This function may interrupt ongoing conversions because it forces
+ *          the SPI interface to stop. Ensure the device is stopped or that
+ *          interruption is acceptable before calling.
+ */
+uint8_t ads_read_reg(ads_t *self, ads_regs_enum_t reg);
+
+
 
 
 #endif

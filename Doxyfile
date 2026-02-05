@@ -1,0 +1,38 @@
+# Doxyfile configuration for ADS1299 Library
+PROJECT_NAME           = "ADS1299 Library"
+PROJECT_NUMBER         = "1.0"
+OUTPUT_DIRECTORY       = docs/doxygen
+CREATE_SUBDIRS         = YES
+OUTPUT_LANGUAGE        = English
+INPUT                  = Include Source Ports README.md USAGE_GUIDE.md
+RECURSIVE              = YES
+FILE_PATTERNS          = *.c *.h *.md
+EXCLUDE                = docs/doxygen
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+GENERATE_LATEX         = NO
+GENERATE_HTML          = YES
+HTML_OUTPUT            = html
+HTML_FILE_EXTENSION    = .html
+GENERATE_TREEVIEW      = YES
+QUIET                  = NO
+WARNINGS               = YES
+
+# Set to YES if you want to include source code in the docs
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = YES
+
+# Use Markdown support
+MARKDOWN_SUPPORT       = YES
+
+# Tag files, if any
+GENERATE_TAGFILE       = 
+
+# Misc
+STRIP_FROM_PATH        = 
+
+# Verbose
+FULL_PATH_NAMES        = NO
+
+# Show documented members only
+HIDE_UNDOC_MEMBERS     = NO

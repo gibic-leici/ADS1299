@@ -1,8 +1,13 @@
-/*
- * ads1299lib_STM32.h
+/**
+ * @file ads1299lib_STM32.h
+ * @brief STM32-specific interface handler definitions for the ADS1299 port
  *
- *  Created on: 3 feb 2026
- *      Author: Usuario
+ * Defines the `STM32_interface_handler_t` used by the STM32 port
+ * implementation in `ads1299lib_STM32.c`.
+ *
+ * @author Marcelo Haberman <marcelo.haberman@gmail.com>,
+ *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
+ * @date 2026-02-05
  */
 
 #ifndef PORTS_STM32_ADS1299LIB_STM32_H_
