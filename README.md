@@ -68,20 +68,6 @@ Marcelo Haberman
 - Email: marcelo.haberman@ing.unlp.edu.ar
 - Organization: GIBIC (gibic.ar)
 
-## License
-
-Please add or confirm a license for this project. (No license declared in repository.)
-
----
-
-If you want, I can:
-- Add a Doxygen configuration for generating HTML docs
-- Port the interface implementation to other MCUs
-- Add a simple example app demonstrating acquisition, parsing and storage
-
-For next steps, tell me which of the options above you'd like to prioritize.
-
----
 
 ## Generating HTML documentation (Doxygen) ✅
 

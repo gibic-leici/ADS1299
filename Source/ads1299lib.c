@@ -12,7 +12,6 @@
 
 #include "ads1299lib.h"
 #include "ads1299lib_interface.h"
-#include "freertos.h"
 #include <assert.h>
 #include <stddef.h>
 
@@ -97,7 +96,40 @@ ads_result_t ads_init(ads_t *self, ads_init_t *init){
 
 	ads_interface_hard_reset(self);
 	ads_reset(self);
-	ads_interface_stop(self);
+	ads_stop(self);
+
+	//reading and testing id
+	self->registers.id.byte = ads_read_reg(self, ADS_ID);
+	if(self->registers.id.bits.DEV_ID != ADS_ID_DEVICE_ID)
+	{
+		self->status = ADS_STATE_FAIL;
+		return R_FAIL;
+	}
+	switch(self->num_channels){
+	case 4:
+		if(self->registers.id.bits.NU_CH != ADS_ID_NUCH_4){
+			self->status = ADS_STATE_FAIL;
+			return R_FAIL;
+		}
+		break;
+	case 6:
+		if(self->registers.id.bits.NU_CH != ADS_ID_NUCH_6){
+			self->status = ADS_STATE_FAIL;
+			return R_FAIL;
+		}
+		break;
+	case 8:
+		if(self->registers.id.bits.NU_CH != ADS_ID_NUCH_8){
+			self->status = ADS_STATE_FAIL;
+			return R_FAIL;
+		}
+		break;
+	default:
+		self->status = ADS_STATE_FAIL;
+		return R_FAIL;
+	}
+
+
 	if(ads_set_config(self)== R_OK){
 		self->status = ADS_STATE_STOPPED;
 	}
@@ -262,7 +294,19 @@ ads_result_t ads_verify_config(ads_t *self){
  * 
  * @param self Pointer to ads_t structure
  */
-void ads_start(ads_t *self){ads_interface_start(self);};
+void ads_start(ads_t *self){
+
+	{
+		uint8_t cmd = ADS_CMD_RDATAC;
+		ads_interface_spi_tx(self, &cmd, 1);
+	}
+	{
+		uint8_t cmd = ADS_CMD_START;
+		ads_interface_spi_tx(self, &cmd, 1);
+	}
+	ads_interface_start(self);
+	self->status = ADS_STATE_ACQUIRING;
+};
 
 /**
  * @brief Stop ADC conversion
@@ -272,7 +316,21 @@ void ads_start(ads_t *self){ads_interface_start(self);};
  * 
  * @param self Pointer to ads_t structure
  */
-void ads_stop(ads_t *self){ads_interface_stop(self);};
+void ads_stop(ads_t *self){
+
+	ads_interface_stop(self);
+
+	{
+		uint8_t cmd = ADS_CMD_SDATAC;
+		ads_interface_spi_tx(self, &cmd, 1);
+	}
+	{
+		uint8_t cmd = ADS_CMD_STOP;
+		ads_interface_spi_tx(self, &cmd, 1);
+	}
+	self->status = ADS_STATE_STOPPED;
+
+};
 
 
 /*******************************************
@@ -575,18 +633,11 @@ uint8_t ads_read_reg(ads_t *self, ads_regs_enum_t reg){
 		return 0xFF;
 	}
 
-	ads_interface_stop(self);
+	ads_stop(self);
 
-	uint8_t buff[2];
-	buff[0] = ADS_CMD_RREG+(uint8_t)reg;
-	buff[1] = 0x00;
-	ads_interface_spi_tx(self, buff, 2);
-	ads_interface_delay(self, 10);
 
-	buff[0]=0x00;
-	ads_interface_spi_rx(self,buff,1);
 
-	return buff[0];
+	return ads_interface_read_reg(self, reg);
 }
 
 

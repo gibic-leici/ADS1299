@@ -87,4 +87,8 @@ void 			ads_interface_stop		(ads_t *self);
  * @param self Pointer to the `ads_t` structure
  */
 void 			ads_interface_start		(ads_t *self);
+
+
+uint8_t ads_interface_read_reg(ads_t *self, ads_regs_enum_t reg);
+
 #endif /* INCLUDE_ADS1299LIB_INTERFACE_H_ */

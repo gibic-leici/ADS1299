@@ -109,6 +109,10 @@ typedef struct {
 #define ADS_REF 4.5f
 
 
+
+
+
+
 #define ADS_WRITE_CONFIG1_RESERVED_43	2
 #define ADS_WRITE_CONFIG1_RESERVED_7 	1
 #define ADS_WRITE_CONFIG2_RESERVED_3	0
@@ -126,10 +130,10 @@ typedef struct {
 
 
 
-
-#define ADS_NUCH_4 0
-#define ADS_NUCH_6 1
-#define ADS_NUCH_8 2
+#define ADS_ID_DEVICE_ID 3
+#define ADS_ID_NUCH_4 0
+#define ADS_ID_NUCH_6 1
+#define ADS_ID_NUCH_8 2
 
 typedef union{
 	uint8_t bytes[3];

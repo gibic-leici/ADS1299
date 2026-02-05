@@ -13,19 +13,34 @@
 #ifndef PORTS_STM32_ADS1299LIB_STM32_H_
 #define PORTS_STM32_ADS1299LIB_STM32_H_
 
+#define SPI_DMA 	0
+#define DRDY_IT 	0
+#define FREERTOS 	0
+
 #include "stm32f4xx_ll_spi.h"
-#include "stm32f4xx_ll_dma.h"
-#include "stm32f4xx_ll_exti.h"
 #include "stm32f4xx_ll_gpio.h"
+
+#if SPI_DMA
+#include "stm32f4xx_ll_dma.h"
+#endif //SPI_DMA
+
+#if DRDY_IT
+#include "stm32f4xx_ll_exti.h"
+#endif //DRDY_IT
+
+#if FREERTOS
 #include "freertos.h"
 #include "semphr.h"
+#endif //FREERTOS
 
 typedef struct {
 	//SPI y dma
 	SPI_TypeDef *spi;
+#if SPI_DMA
 	DMA_TypeDef *dma;
 	uint32_t spi_rx_dma_stream;
 	uint32_t spi_tx_dma_stream;
+#endif //SPI_DMA
 
 	//gpios
 	GPIO_TypeDef *cs_port;
@@ -36,17 +51,22 @@ typedef struct {
 	uint32_t drdy_pin;
 
 	// drdy irq
+#if DRDY_IT
 	IRQn_Type drdy_EXTI_IRQn;
 	uint32_t drdy_EXTI_line;
+#endif //DRDY_IT
 
 	//freertos
+#if FREERTOS
 	SemaphoreHandle_t mutex;
-
+#endif //FREERTOS
 	//delay handler
 	void (*delay)(uint32_t millis);
 }	STM32_interface_handler_t;
 
+#if SPI_DMA
 void ads_spi_rx_DMA_stop_and_prepare(ads_t *self, uint8_t * buff, uint16_t len);
 void ads_spi_rx_DMA_start_fast(ads_t *self);
+#endif //SPI_DMA
 
 #endif /* PORTS_STM32_ADS1299LIB_STM32_H_ */
