@@ -58,6 +58,9 @@ void 		 	ads_interface_spi_tx	(ads_t *self, uint8_t *buff, uint16_t len);
  */
 void 		 	ads_interface_spi_rx	(ads_t *self, uint8_t *buff, uint16_t len);
 
+
+void ads_interface_spi_rx_sample(ads_t *self, uint8_t *buff);
+
 /**
  * @brief Delay helper using platform timing
  *

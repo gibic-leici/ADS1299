@@ -192,6 +192,31 @@ void ads_interface_spi_tx(ads_t *self, uint8_t *buff, uint16_t len) {
 
 }
 
+
+inline void ads_interface_spi_rx_sample(ads_t *self, uint8_t *buff) {
+
+	STM32_interface_handler_t *interface =
+			(STM32_interface_handler_t*) self->interface_Handler;
+
+	int bytes_to_read = self->num_channels*3 + 3;
+#if FREERTOS
+	xSemaphoreTake( interface->mutex, portMAX_DELAY);
+#endif //FREERTOS
+	interface->cs_port->BSRR = interface->cs_pin << 16;
+	for (int j = 0; j < bytes_to_read; j++) {
+		WAIT(interface->spi);
+		LL_SPI_TransmitData8(interface->spi, 0x00);
+		WAIT(interface->spi);
+
+		*(buff + j) = LL_SPI_ReceiveData8(interface->spi);
+	}
+	interface->cs_port->BSRR = interface->cs_pin;
+#if FREERTOS
+	xSemaphoreGive( interface->mutex );
+#endif //FREERTOS
+
+}
+
 /**
  * @brief Receive data via SPI with byte-level control
  * 
