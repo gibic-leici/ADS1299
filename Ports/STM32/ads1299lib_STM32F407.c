@@ -10,10 +10,9 @@
  * @date 2026-02-05
  */
 
+#include <ads1299lib_STM32F407.h>
 #include "ads1299lib.h"
 #include "ads1299lib_interface.h"
-#include "ads1299lib_STM32.h"
-
 #include <assert.h>
 
 /**
@@ -345,7 +344,44 @@ void ads_spi_rx_DMA_stop_and_prepare(ads_t *self, uint8_t * buff, uint16_t len)
 	LL_DMA_EnableIT_TC(interface->dma, interface->spi_rx_dma_stream);
 }
 
-void ads_spi_rx_DMA_start_fast(ads_t *self)
+
+void ads_interface_spi_rx_sample_DMA_prepare_next(ads_t *self, uint8_t * buff)
+{
+	assert(self != NULL);
+	assert(self->interface_Handler != NULL);
+
+	STM32_interface_handler_t *interface =
+				(STM32_interface_handler_t*) self->interface_Handler;
+
+	int bytes_to_read = self->num_channels*3 + 3;
+	assert(buff != NULL);
+
+	LL_GPIO_SetOutputPin(interface->cs_port,interface->cs_pin);
+
+	LL_DMA_DisableStream(interface->dma, interface->spi_rx_dma_stream); // RX
+	LL_DMA_DisableStream(interface->dma, interface->spi_tx_dma_stream); // TX
+
+
+	LL_DMA_ConfigAddresses(interface->dma, interface->spi_rx_dma_stream, 	LL_SPI_DMA_GetRegAddr(interface->spi), 	(uint32_t)buff,							LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+	LL_DMA_ConfigAddresses(interface->dma, interface->spi_tx_dma_stream,  	(uint32_t)&dummy, 						LL_SPI_DMA_GetRegAddr(interface->spi),	LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+	// Configure data length
+	LL_DMA_SetDataLength(interface->dma, interface->spi_rx_dma_stream, bytes_to_read);
+	LL_DMA_SetDataLength(interface->dma, interface->spi_tx_dma_stream, bytes_to_read);
+
+
+	LL_SPI_EnableDMAReq_RX(interface->spi);
+	LL_SPI_EnableDMAReq_TX(interface->spi);
+
+	// Clear DMA transfer complete flags
+	LL_DMA_ClearFlag_TC3(interface->dma); // Stream 3 - RX
+	LL_DMA_ClearFlag_TC4(interface->dma); // Stream 4 - TX
+	// Enable DMA Transfer complete interrupt
+	LL_DMA_EnableIT_TC(interface->dma, interface->spi_rx_dma_stream);
+}
+
+
+
+void ads_interface_spi_rx_sample_DMA(ads_t *self)
 {
 	assert(self != NULL);
 	assert(self->interface_Handler != NULL);

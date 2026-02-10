@@ -13,8 +13,8 @@
 #ifndef PORTS_STM32_ADS1299LIB_STM32_H_
 #define PORTS_STM32_ADS1299LIB_STM32_H_
 
-#define SPI_DMA 	0
-#define DRDY_IT 	0
+#define SPI_DMA 	1
+#define DRDY_IT 	1
 #define FREERTOS 	0
 
 #include "stm32f4xx_ll_spi.h"
@@ -65,8 +65,9 @@ typedef struct {
 }	STM32_interface_handler_t;
 
 #if SPI_DMA
-void ads_spi_rx_DMA_stop_and_prepare(ads_t *self, uint8_t * buff, uint16_t len);
-void ads_spi_rx_DMA_start_fast(ads_t *self);
+#include "ads1299lib.h"
+void ads_interface_spi_rx_sample_DMA(ads_t *self);
+void ads_interface_spi_rx_sample_DMA_prepare_next(ads_t *self, uint8_t * buff);
 #endif //SPI_DMA
 
 #endif /* PORTS_STM32_ADS1299LIB_STM32_H_ */

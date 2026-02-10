@@ -306,7 +306,7 @@ void ads_start(ads_t *self){
 	}
 	ads_interface_start(self);
 	self->status = ADS_STATE_ACQUIRING;
-};
+}
 
 /**
  * @brief Stop ADC conversion
@@ -330,7 +330,7 @@ void ads_stop(ads_t *self){
 	}
 	self->status = ADS_STATE_STOPPED;
 
-};
+}
 
 
 /*******************************************
