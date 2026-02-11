@@ -10,10 +10,12 @@
  * @date 2026-02-05
  */
 
-#include <ads1299lib_STM32F407.h>
+#include "ads1299lib_STM32F407.h"
 #include "ads1299lib.h"
 #include "ads1299lib_interface.h"
+#include "stm32f4xx_ll_bus.h"
 #include <assert.h>
+
 
 /**
  * @brief Perform a delay using the hardware interface handler
@@ -58,6 +60,339 @@ void ads_interface_hard_reset(ads_t *self) {
 }
 
 /**
+ * @brief Initialize GPIO pins for ADS1299 communication
+ * 
+ * Configures the CS (Chip Select), RESET/PWDN, and DRDY pins as required
+ * for the ADS1299 interface. CS and RESET pins are set as push-pull outputs,
+ * and DRDY pin is configured based on interrupt mode.
+ * 
+ * @param interface Pointer to STM32_interface_handler_t structure
+ */
+static void init_gpios(STM32_interface_handler_t *interface) {
+	assert(interface != NULL);
+	assert(interface->cs_port != NULL);
+	assert(interface->prst_port != NULL);
+	assert(interface->drdy_port != NULL);
+
+	// Enable GPIO port clocks
+	// Enable only the GPIO port clocks that are actually used
+	if (interface->cs_port != NULL) {
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA + ((uint32_t)interface->cs_port - GPIOA_BASE) / 0x400);
+	}
+	if (interface->drdy_port != NULL) {
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA + ((uint32_t)interface->drdy_port - GPIOA_BASE) / 0x400);
+	}
+	if (interface->prst_port != NULL) {
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA + ((uint32_t)interface->prst_port - GPIOA_BASE) / 0x400);
+	}
+
+	// Configure CS pin as output (push-pull, no pull)
+	LL_GPIO_SetPinMode(interface->cs_port, interface->cs_pin, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinOutputType(interface->cs_port, interface->cs_pin, LL_GPIO_OUTPUT_PUSHPULL);
+	LL_GPIO_SetPinSpeed(interface->cs_port, interface->cs_pin, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetOutputPin(interface->cs_port, interface->cs_pin);  // CS inactive HIGH
+
+	// Configure RESET/PWDN pin as output (push-pull, no pull)
+	LL_GPIO_SetPinMode(interface->prst_port, interface->prst_pin, LL_GPIO_MODE_OUTPUT);
+	LL_GPIO_SetPinOutputType(interface->prst_port, interface->prst_pin, LL_GPIO_OUTPUT_PUSHPULL);
+	LL_GPIO_SetPinSpeed(interface->prst_port, interface->prst_pin, LL_GPIO_SPEED_FREQ_HIGH);
+	LL_GPIO_SetOutputPin(interface->prst_port, interface->prst_pin);  // RESET inactive HIGH
+
+	// Configure DRDY pin as input for data ready interrupt/polling
+	LL_GPIO_SetPinMode(interface->drdy_port, interface->drdy_pin, LL_GPIO_MODE_INPUT);
+	LL_GPIO_SetPinPull(interface->drdy_port, interface->drdy_pin, LL_GPIO_PULL_UP);  // Pull-up for DRDY line
+}
+
+/**
+ * @brief Configure SPI peripheral clock and GPIO pins based on SPI instance
+ * 
+ * Automatically detects which SPI peripheral is configured and enables:
+ * - Appropriate clock (APB1 for SPI2/SPI3, APB2 for SPI1)
+ * - Required GPIO ports and pins (MISO, MOSI, SCK)
+ * 
+ * Supported configurations for STM32F407:
+ * - SPI1: PA5(SCK), PA6(MISO), PA7(MOSI), AF5
+ * - SPI2: PB10(SCK), PC2(MISO), PC3(MOSI), AF5
+ * - SPI3: PC10(SCK), PC11(MISO), PC12(MOSI), AF6
+ * 
+ * @param spi Pointer to SPI peripheral (SPI1, SPI2, or SPI3)
+ */
+static void init_spi_gpio_and_clock(SPI_TypeDef *spi) {
+	assert(spi != NULL);
+
+	LL_GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+#if defined(SPI1)
+	if (spi == SPI1) {
+		// Enable SPI1 peripheral clock (APB2)
+		LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SPI1);
+
+		// Enable GPIOA clock
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOA);
+
+		// Configure PA5(SCK), PA6(MISO), PA7(MOSI) as alternate function AF5
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_5 | LL_GPIO_PIN_6 | LL_GPIO_PIN_7;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		GPIO_InitStruct.Alternate = LL_GPIO_AF_5;
+		LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+		return;
+	}
+#endif
+
+#if defined(SPI2)
+	if (spi == SPI2) {
+		// Enable SPI2 peripheral clock (APB1)
+		LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_SPI2);
+
+		// Enable GPIOB and GPIOC clocks
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOB);
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOC);
+
+		// Configure PB10(SCK) as alternate function AF5
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_10;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		GPIO_InitStruct.Alternate = LL_GPIO_AF_5;
+		LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+		// Configure PC2(MISO), PC3(MOSI) as alternate function AF5
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_2 | LL_GPIO_PIN_3;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		GPIO_InitStruct.Alternate = LL_GPIO_AF_5;
+		LL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+		return;
+	}
+#endif
+
+#if defined(SPI3)
+	if (spi == SPI3) {
+		// Enable SPI3 peripheral clock (APB1)
+		LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_SPI3);
+
+		// Enable GPIOC clock
+		LL_AHB1_GRP1_EnableClock(LL_AHB1_GRP1_PERIPH_GPIOC);
+
+		// Configure PC10(SCK), PC11(MISO), PC12(MOSI) as alternate function AF6
+		GPIO_InitStruct.Pin = LL_GPIO_PIN_10 | LL_GPIO_PIN_11 | LL_GPIO_PIN_12;
+		GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
+		GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_VERY_HIGH;
+		GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
+		GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
+		GPIO_InitStruct.Alternate = LL_GPIO_AF_6;
+		LL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+		return;
+	}
+#endif
+
+	// If we reach here, unsupported SPI peripheral
+	assert(0);
+}
+
+/**
+ * @brief Initialize SPI peripheral and conditionally DMA for ADS1299 communication
+ * 
+ * Configures SPI Mode 1 (CPOL=0, CPHA=1), 8-bit data width, MSB first,
+ * with software NSS management. Automatically enables SPI peripheral clock
+ * and configures GPIO pins based on the SPI instance. Clock speed is configured
+ * to meet ADS1299's maximum 10 MHz requirement. If SPI_DMA is enabled, initializes
+ * DMA streams for RX and TX transfers with proper channel and memory increment settings.
+ * 
+ * @param self Pointer to ads_t structure containing interface handler
+ * 
+ * @note Uses software-managed Chip Select (CS) via GPIO
+ * @note DMA channels must be configured in STM32_interface_handler_t
+ */
+static void init_spi(ads_t *self) {
+	assert(self != NULL);
+	assert(self->interface_Handler != NULL);
+
+	STM32_interface_handler_t *interface =
+			(STM32_interface_handler_t*) self->interface_Handler;
+	SPI_TypeDef *spi = interface->spi;
+	assert(spi != NULL);
+
+	// Configure SPI peripheral clock and GPIO pins
+	init_spi_gpio_and_clock(spi);
+
+	// Configure SPI using LL_SPI_InitTypeDef structure
+	LL_SPI_InitTypeDef SPI_InitStruct = {0};
+	SPI_InitStruct.TransferDirection = LL_SPI_FULL_DUPLEX;
+	SPI_InitStruct.Mode = LL_SPI_MODE_MASTER;
+	SPI_InitStruct.DataWidth = LL_SPI_DATAWIDTH_8BIT;
+	SPI_InitStruct.ClockPolarity = LL_SPI_POLARITY_LOW;
+	SPI_InitStruct.ClockPhase = LL_SPI_PHASE_2EDGE;
+	SPI_InitStruct.NSS = LL_SPI_NSS_SOFT;
+	SPI_InitStruct.BaudRate = LL_SPI_BAUDRATEPRESCALER_DIV2;  // < 18MHz 
+	SPI_InitStruct.BitOrder = LL_SPI_MSB_FIRST;
+	SPI_InitStruct.CRCCalculation = LL_SPI_CRCCALCULATION_DISABLE;
+	SPI_InitStruct.CRCPoly = 10;
+	LL_SPI_Init(spi, &SPI_InitStruct);
+	LL_SPI_SetStandard(spi, LL_SPI_PROTOCOL_MOTOROLA);
+
+#if SPI_DMA
+	// Initialize DMA streams for SPI transfers
+	assert(interface->dma != NULL);
+
+	/* DMA controller clock enable */
+    
+    /* Enable the appropriate DMA controller clock depending on the
+     * configured DMA instance (DMA1 or DMA2). Also enable the NVIC IRQ
+     * for the RX stream transfer-complete only. This makes the code
+     * follow the selected configuration in `interface` rather than
+     * hard-coding DMA1_Stream3. */
+    if (interface->dma == DMA1) {
+	__HAL_RCC_DMA1_CLK_ENABLE();
+	/* Select IRQ based on configured RX stream */
+	IRQn_Type rx_irq = 0;
+#if defined(LL_DMA_STREAM_0)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_0) rx_irq = DMA1_Stream0_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_1)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_1) rx_irq = DMA1_Stream1_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_2)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_2) rx_irq = DMA1_Stream2_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_3)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_3) rx_irq = DMA1_Stream3_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_4)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_4) rx_irq = DMA1_Stream4_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_5)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_5) rx_irq = DMA1_Stream5_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_6)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_6) rx_irq = DMA1_Stream6_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_7)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_7) rx_irq = DMA1_Stream7_IRQn;
+#endif
+	if (rx_irq) {
+	    NVIC_SetPriority(rx_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+	    NVIC_EnableIRQ(rx_irq);
+	}
+    } else if (interface->dma == DMA2) {
+	__HAL_RCC_DMA2_CLK_ENABLE();
+	IRQn_Type rx_irq = 0;
+#if defined(LL_DMA_STREAM_0)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_0) rx_irq = DMA2_Stream0_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_1)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_1) rx_irq = DMA2_Stream1_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_2)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_2) rx_irq = DMA2_Stream2_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_3)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_3) rx_irq = DMA2_Stream3_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_4)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_4) rx_irq = DMA2_Stream4_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_5)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_5) rx_irq = DMA2_Stream5_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_6)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_6) rx_irq = DMA2_Stream6_IRQn;
+	else
+#endif
+#if defined(LL_DMA_STREAM_7)
+	if (interface->spi_rx_dma_stream == LL_DMA_STREAM_7) rx_irq = DMA2_Stream7_IRQn;
+#endif
+	if (rx_irq) {
+	    NVIC_SetPriority(rx_irq, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+	    NVIC_EnableIRQ(rx_irq);
+	}
+    }
+
+	// Disable DMA streams initially
+	LL_DMA_DisableStream(interface->dma, interface->spi_rx_dma_stream);
+	LL_DMA_DisableStream(interface->dma, interface->spi_tx_dma_stream);
+
+	// Configure RX DMA stream (Peripheral to Memory)
+	LL_DMA_SetDataTransferDirection(interface->dma, interface->spi_rx_dma_stream, LL_DMA_DIRECTION_PERIPH_TO_MEMORY);
+	LL_DMA_SetStreamPriorityLevel(interface->dma, interface->spi_rx_dma_stream, LL_DMA_PRIORITY_LOW);
+	LL_DMA_SetMode(interface->dma, interface->spi_rx_dma_stream, LL_DMA_MODE_NORMAL);
+	LL_DMA_SetPeriphIncMode(interface->dma, interface->spi_rx_dma_stream, LL_DMA_PERIPH_NOINCREMENT);
+	LL_DMA_SetMemoryIncMode(interface->dma, interface->spi_rx_dma_stream, LL_DMA_MEMORY_INCREMENT);
+	LL_DMA_SetPeriphSize(interface->dma, interface->spi_rx_dma_stream, LL_DMA_PDATAALIGN_BYTE);
+	LL_DMA_SetMemorySize(interface->dma, interface->spi_rx_dma_stream, LL_DMA_MDATAALIGN_BYTE);
+	LL_DMA_DisableFifoMode(interface->dma, interface->spi_rx_dma_stream);
+
+	// Configure TX DMA stream (Memory to Peripheral)
+	LL_DMA_SetDataTransferDirection(interface->dma, interface->spi_tx_dma_stream, LL_DMA_DIRECTION_MEMORY_TO_PERIPH);
+	LL_DMA_SetStreamPriorityLevel(interface->dma, interface->spi_tx_dma_stream, LL_DMA_PRIORITY_LOW);
+	LL_DMA_SetMode(interface->dma, interface->spi_tx_dma_stream, LL_DMA_MODE_NORMAL);
+	LL_DMA_SetPeriphIncMode(interface->dma, interface->spi_tx_dma_stream, LL_DMA_PERIPH_NOINCREMENT);
+	LL_DMA_SetMemoryIncMode(interface->dma, interface->spi_tx_dma_stream, LL_DMA_MEMORY_NOINCREMENT);
+	LL_DMA_SetPeriphSize(interface->dma, interface->spi_tx_dma_stream, LL_DMA_PDATAALIGN_BYTE);
+	LL_DMA_SetMemorySize(interface->dma, interface->spi_tx_dma_stream, LL_DMA_MDATAALIGN_BYTE);
+	LL_DMA_DisableFifoMode(interface->dma, interface->spi_tx_dma_stream);
+#endif //SPI_DMA
+}
+
+
+void init_drdy_interrupt(STM32_interface_handler_t *interface)
+{
+	assert(interface != NULL);
+
+	
+	// Configure EXTI line for DRDY pin (falling edge detection)
+	// Map GPIO port/pin to SYSCFG EXTICR so EXTI line is routed correctly.
+	LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_SYSCFG);
+	{
+		uint32_t port_index = ((uint32_t)interface->drdy_port - GPIOA_BASE) / 0x400;
+		uint32_t pin_mask = interface->drdy_pin;
+		uint32_t pin_index = 0;
+		while ((pin_mask > 1) && ((pin_mask & 0x1) == 0)) {
+			pin_mask >>= 1;
+			pin_index++;
+		}
+		uint32_t exticr_idx = pin_index >> 2;
+		uint32_t exticr_pos = (pin_index & 0x3) * 4;
+		uint32_t tmp = SYSCFG->EXTICR[exticr_idx];
+		tmp &= ~(0xF << exticr_pos);
+		tmp |= ((port_index & 0xF) << exticr_pos);
+		SYSCFG->EXTICR[exticr_idx] = tmp;
+	}
+	LL_EXTI_InitTypeDef EXTI_InitStruct = {0};
+	EXTI_InitStruct.Line_0_31 = interface->drdy_EXTI_line;
+	EXTI_InitStruct.LineCommand = ENABLE;
+	EXTI_InitStruct.Mode = LL_EXTI_MODE_IT;
+	EXTI_InitStruct.Trigger = LL_EXTI_TRIGGER_FALLING;
+	LL_EXTI_Init(&EXTI_InitStruct);
+
+	// Configure NVIC for DRDY EXTI interrupt
+	NVIC_SetPriority(interface->drdy_EXTI_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
+	NVIC_EnableIRQ(interface->drdy_EXTI_IRQn);
+
+
+}
+
+
+/**
  * @brief Initialize ADS1299 hardware interface
  * 
  * Sets up the SPI interface, DMA streams, and synchronization primitives
@@ -83,16 +418,19 @@ ads_result_t ads_interface_init(ads_t *self) {
 	xSemaphoreGive( interface->mutex );
 #endif //FREERTOS
 
+	//init GPIOS
+	init_gpios(interface);
+
+	//init SPI
+	init_spi(self);
+
+#if DRDY_IT
+	//intit EXTI IRQ for DRDY pin
+	init_drdy_interrupt(interface);	
+#endif //DRDY_IT
+
 	// Enable SPI peripheral
 	LL_SPI_Enable(interface->spi);
-#if SPI_DMA
-	// Disable DMA streams initially
-	LL_DMA_DisableStream(interface->dma, interface->spi_rx_dma_stream);
-	LL_DMA_DisableStream(interface->dma, interface->spi_tx_dma_stream);
-	
-	// Configure TX DMA for single byte mode (no memory increment)
-	LL_DMA_SetMemoryIncMode(interface->dma, interface->spi_tx_dma_stream, LL_DMA_MEMORY_NOINCREMENT);
-#endif //SPI_DMA
 	return R_OK;
 }
 
