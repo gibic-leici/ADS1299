@@ -16,19 +16,6 @@
 #include <stdint.h>
 #include "ads1299lib_config.h"
 
-/* Registros */
-#define dirID 0x00
-#define dirCONFIG1 0x01
-#define dirCONFIG2 0x02
-#define dirCONFIG3 0x03
-#define dirCONFIG4 0x17
-#define dirCHxSET 0x05
-
-/*******************************
-* DEFINICIONES DE TIPOS PARA   *
-* REGISTROS DEL ADS1299        *
-* 9.6 Register Maps	       *
-*******************************/
 
 /************************************/
 //9.6.1.1 ID: ID Control Register (address = 00h) (reset = xxh)

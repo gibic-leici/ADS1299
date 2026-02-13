@@ -21,9 +21,9 @@
  * platform-specific implementation.
  *
  * @param self Pointer to the `ads_t` structure
- * @return ads_result_t R_OK on success, R_FAIL on error
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on error
  */
-ads_result_t 	ads_interface_init		(ads_t *self);
+ads_result_t ads_interface_init(ads_t *self);
 
 /**
  * @brief Perform a hardware reset using PRST/RESET pin
@@ -32,7 +32,7 @@ ads_result_t 	ads_interface_init		(ads_t *self);
  *
  * @param self Pointer to the `ads_t` structure
  */
-void 			ads_interface_hard_reset(ads_t *self);
+void ads_interface_hard_reset(ads_t *self);
 
 /**
  * @brief Transmit a buffer via SPI
@@ -45,7 +45,7 @@ void 			ads_interface_hard_reset(ads_t *self);
  * @param buff Data buffer to transmit
  * @param len Length in bytes
  */
-void 		 	ads_interface_spi_tx	(ads_t *self, uint8_t *buff, uint16_t len);
+void ads_interface_spi_tx(ads_t *self, uint8_t *buff, uint16_t len);
 
 /**
  * @brief Receive data via SPI
@@ -56,9 +56,16 @@ void 		 	ads_interface_spi_tx	(ads_t *self, uint8_t *buff, uint16_t len);
  * @param buff Buffer to receive data into
  * @param len Number of bytes to receive
  */
-void 		 	ads_interface_spi_rx	(ads_t *self, uint8_t *buff, uint16_t len);
+void ads_interface_spi_rx(ads_t *self, uint8_t *buff, uint16_t len);
 
-
+/**
+ * @brief Receive data of one sample in Read continuous mode via SPI
+ *
+ * Platform-specific SPI receive routine.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param buff Buffer to receive data into
+ */
 void ads_interface_spi_rx_sample(ads_t *self, uint8_t *buff);
 
 /**
@@ -69,7 +76,7 @@ void ads_interface_spi_rx_sample(ads_t *self, uint8_t *buff);
  * @param self Pointer to the `ads_t` structure
  * @param millis Delay in milliseconds
  */
-void 			ads_interface_delay		(ads_t *self, uint16_t millis);
+void ads_interface_delay(ads_t *self, uint16_t millis);
 
 /**
  * @brief Stop data acquisition / disable data-ready interrupt
@@ -79,7 +86,7 @@ void 			ads_interface_delay		(ads_t *self, uint16_t millis);
  *
  * @param self Pointer to the `ads_t` structure
  */
-void 			ads_interface_stop		(ads_t *self);
+void ads_interface_stop(ads_t *self);
 
 /**
  * @brief Start data acquisition / enable data-ready interrupt
@@ -89,8 +96,7 @@ void 			ads_interface_stop		(ads_t *self);
  *
  * @param self Pointer to the `ads_t` structure
  */
-void 			ads_interface_start		(ads_t *self);
-
+void ads_interface_start(ads_t *self);
 
 uint8_t ads_interface_read_reg(ads_t *self, ads_regs_enum_t reg);
 

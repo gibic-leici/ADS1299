@@ -7,8 +7,10 @@ if (-not (Get-Command doxygen -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+```powershell
+$root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Push-Location $root
+```
 
 Write-Host "Running Doxygen with Doxyfile at: $root\Doxyfile"
 & doxygen Doxyfile
@@ -22,7 +24,8 @@ $index = Join-Path -Path $root -ChildPath "docs/doxygen/html/index.html"
 if (Test-Path $index) {
     Write-Host "Documentation generated at: $index"
     Start-Process $index
-} else {
+}
+else {
     Write-Host "Documentation generated but index.html not found. Check docs/doxygen/html folder."
 }
 Pop-Location

@@ -53,6 +53,7 @@ Thumbs.db
 .env
 *.env
 .venv/
+docs/doxygen/
 
 Debug/
 *.o

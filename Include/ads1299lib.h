@@ -24,11 +24,11 @@
 * RESULT AND STATE ENUMERATIONS*
 *******************************/
 
-typedef enum resultado {R_OK, R_FAIL} ads_result_t;
-typedef enum  {ADS_STATE_MIN = 0, ADS_STATE_PRE_INIT=0, ADS_STATE_STOPPED, ADS_STATE_ACQUIRING, ADS_STATE_FAIL, ADS_STATE_MAX = ADS_STATE_FAIL}  ads_state_t;
-typedef enum canalmodo_e {	ADS_CHMOD_MIN = 0,
+typedef enum {ADS_R_OK, ADS_R_FAIL} ads_result_t;
+typedef enum {ADS_STATE_MIN = 0, ADS_STATE_PRE_INIT=0, ADS_STATE_STOPPED, ADS_STATE_ACQUIRING, ADS_STATE_FAIL, ADS_STATE_MAX = ADS_STATE_FAIL}  ads_state_t;
+typedef enum ads_channel_mode_e {	ADS_CHMOD_MIN = 0,
 							ADS_CHMOD_NORMAL=0,
-							ADS_CHMOD_CORTO=1,
+							ADS_CHMOD_SHORT=1,
 							ADS_CHMOD_BIAS=2,
 							ADS_CHMOD_VCC=3,
 							ADS_CHMOD_TEMP=4,
@@ -37,7 +37,7 @@ typedef enum canalmodo_e {	ADS_CHMOD_MIN = 0,
 							ADS_CHMOD_BIASN=7,
 							ADS_CHMOD_MAX = 7}	ads_channel_mode_t;
 
-typedef enum tasa_e {		ADS_DR_MIN = 0,
+typedef enum ads_datarate_e {		ADS_DR_MIN = 0,
 							ADS_DR_16KSPS=0,
 							ADS_DR_8KSPS=1,
 							ADS_DR_4KSPS=2,
@@ -47,7 +47,7 @@ typedef enum tasa_e {		ADS_DR_MIN = 0,
 							ADS_DR_250SPS=6,
 							ADS_DR_MAX=6}		ads_datarate_t;
 
-typedef enum ganancia_e {	ADS_GAIN_MIN=0,
+typedef enum ads_gain_e {	ADS_GAIN_MIN=0,
 							ADS_GAIN_1=0,
 							ADS_GAIN_2=1,
 							ADS_GAIN_4=2,
@@ -57,7 +57,7 @@ typedef enum ganancia_e {	ADS_GAIN_MIN=0,
 							ADS_GAIN_24=6,
 							ADS_GAIN_MAX=6}		ads_gain_t;
 
-typedef enum canalactivo_e {ADS_CHANNEL_ENABLED=0,
+typedef enum ads_channel_state_e {ADS_CHANNEL_ENABLED=0,
 							ADS_CHANNEL_DISABLED=1}	ads_channel_enabled_t;
 
 typedef void* ads_interface_t;
@@ -145,7 +145,7 @@ typedef struct{
 }ads_sample_pkg_t;
 
 
-/* Comandos */
+/* Commands */
 // System
 #define ADS_CMD_WAKEUP 0x02
 #define ADS_CMD_STANDBY 0x04
@@ -172,7 +172,7 @@ typedef struct{
  *
  * @param self Pointer to the `ads_t` structure
  * @param init Pointer to the initialization configuration structure
- * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @note On success `self->status` will be set to ADS_STATE_STOPPED; on
  *       failure it will be set to ADS_STATE_FAIL.
  */
@@ -223,13 +223,13 @@ void ads_reset(ads_t *self);
  * Short, Bias, VCC, Temperature, Test, BIAS+, BIAS-).
  *
  * @param self Pointer to the `ads_t` structure
- * @param canalmodo Array of channel modes (one per configured channel)
- * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @param channel_mode Array of channel modes (one per configured channel)
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @warning This function forces the device into the stopped state when
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * canalmodo);
+ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * channel_mode);
 
 /**
  * @brief Enable or disable individual channels
@@ -239,13 +239,13 @@ ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * canalmodo);
  * down the channel.
  *
  * @param self Pointer to the `ads_t` structure
- * @param canalactivo Array of enable/disable flags (one per configured channel)
- * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @param channel_enable Array of enable/disable flags (one per configured channel)
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @warning This function forces the device into the stopped state when
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* canalactivo);
+ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* channel_enable);
 
 /**
  * @brief Set programmable gain amplifier (PGA) for each channel
@@ -253,13 +253,13 @@ ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* canalactivo)
  * Possible gains: 1, 2, 4, 6, 8, 12, 24 (encoded as enumeration values).
  *
  * @param self Pointer to the `ads_t` structure
- * @param ganancias Array of gain values (one per configured channel)
- * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @param gain Array of gain values (one per configured channel)
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @warning This function forces the device into the stopped state when
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *ganancias);
+ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *gain);
 
 /**
  * @brief Set data sampling rate for all channels
@@ -268,13 +268,13 @@ ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *ganancias);
  * is applied.
  *
  * @param self Pointer to the `ads_t` structure
- * @param tasa Data rate enumeration value (ADS_DR_16KSPS .. ADS_DR_250SPS)
- * @return ads_result_t R_OK on success, R_FAIL on failure
+ * @param data_rate Data rate enumeration value (ADS_DR_16KSPS .. ADS_DR_250SPS)
+ * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @warning This function forces the device into the stopped state when
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_data_rate(ads_t *self, ads_datarate_t tasa);
+ads_result_t ads_set_data_rate(ads_t *self, ads_datarate_t data_rate);
 
 /**
  * @brief Get input multiplexer mode for all channels
@@ -283,12 +283,12 @@ ads_result_t ads_set_data_rate(ads_t *self, ads_datarate_t tasa);
  * mode for each channel.
  *
  * @param self Pointer to the `ads_t` structure
- * @param modos Output array for channel modes (one per configured channel)
+ * @param modes Output array for channel modes (one per configured channel)
  * @note This function performs SPI reads and may stop ongoing conversions.
  * @warning The function may interrupt conversions since it stops the SPI
  *          interface during register reads. Ensure this is acceptable.
  */
-void ads_get_ch_mode(ads_t *self, ads_channel_mode_t *modos);
+void ads_get_ch_mode(ads_t *self, ads_channel_mode_t *modes);
 
 /**
  * @brief Get current data sampling rate
@@ -309,10 +309,10 @@ ads_datarate_t ads_get_data_rate(ads_t *self);
  * programmed gain for each channel.
  *
  * @param self Pointer to the `ads_t` structure
- * @param ganancias Output array for gain values (one per configured channel)
+ * @param gain Output array for gain values (one per configured channel)
  * @note This function performs SPI reads and may stop ongoing conversions.
  */
-void ads_get_ch_gain(ads_t *self, ads_gain_t *ganancias);
+void ads_get_ch_gain(ads_t *self, ads_gain_t *gain);
 
 /**
  * @brief Read device ID register
