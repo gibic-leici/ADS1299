@@ -46,34 +46,35 @@ static void enable_gpio_clock(GPIO_TypeDef *port) {
 static void config_gpio_pin(GPIO_TypeDef *port, uint32_t pin_mask,
                             uint32_t mode, uint32_t type, uint32_t speed,
                             uint32_t pull, uint32_t af) {
-  uint32_t pin_pos = 0;
-  while ((pin_mask >> pin_pos) != 1)
-    pin_pos++;
+  for (uint32_t pin_pos = 0; pin_pos < 16; pin_pos++) {
+    if (!(pin_mask & (1U << pin_pos)))
+      continue;
 
-  // Mode
-  port->MODER &= ~(3U << (pin_pos * 2));
-  port->MODER |= (mode << (pin_pos * 2));
+    // Mode
+    port->MODER &= ~(3U << (pin_pos * 2));
+    port->MODER |= (mode << (pin_pos * 2));
 
-  // Type
-  port->OTYPER &= ~(1U << pin_pos);
-  port->OTYPER |= (type << pin_pos);
+    // Type
+    port->OTYPER &= ~(1U << pin_pos);
+    port->OTYPER |= (type << pin_pos);
 
-  // Speed
-  port->OSPEEDR &= ~(3U << (pin_pos * 2));
-  port->OSPEEDR |= (speed << (pin_pos * 2));
+    // Speed
+    port->OSPEEDR &= ~(3U << (pin_pos * 2));
+    port->OSPEEDR |= (speed << (pin_pos * 2));
 
-  // Pull
-  port->PUPDR &= ~(3U << (pin_pos * 2));
-  port->PUPDR |= (pull << (pin_pos * 2));
+    // Pull
+    port->PUPDR &= ~(3U << (pin_pos * 2));
+    port->PUPDR |= (pull << (pin_pos * 2));
 
-  // AF
-  if (mode == 2) { // AF Mode
-    if (pin_pos < 8) {
-      port->AFR[0] &= ~(0xF << (pin_pos * 4));
-      port->AFR[0] |= (af << (pin_pos * 4));
-    } else {
-      port->AFR[1] &= ~(0xF << ((pin_pos - 8) * 4));
-      port->AFR[1] |= (af << ((pin_pos - 8) * 4));
+    // AF
+    if (mode == 2) { // AF Mode
+      if (pin_pos < 8) {
+        port->AFR[0] &= ~(0xF << (pin_pos * 4));
+        port->AFR[0] |= (af << (pin_pos * 4));
+      } else {
+        port->AFR[1] &= ~(0xF << ((pin_pos - 8) * 4));
+        port->AFR[1] |= (af << ((pin_pos - 8) * 4));
+      }
     }
   }
 }
@@ -254,14 +255,14 @@ static void init_spi(ads_t *self) {
   init_spi_gpio_and_clock(spi);
 
   // Configure SPI CR1
-  // BR: Div8 (010) for safe speed.
+  // BR: Div2 (000) for safe speed  (18MHZ).
   // ADS1299 max SCLK is 20MHz.
   // APB2 (SPI1) 84MHz / 8 = 10.5MHz.
   // APB1 (SPI2/3) 42MHz / 8 = 5.25MHz.
   // This is safe and reliable.
   // CPOL=0, CPHA=1 (Mode 1).
   // DFF=8bit (0). MSB First (0). SSM=1, SSI=1, MSTR=1.
-  spi->CR1 = (2 << 3) |  // BR: Div8
+  spi->CR1 = (0 << 3) |  // BR: Div2
              (0 << 1) |  // CPOL: Low
              (1 << 0) |  // CPHA: 2Edge
              (0 << 11) | // DFF: 8-bit
