@@ -98,6 +98,19 @@ void ads_interface_stop(ads_t *self);
  */
 void ads_interface_start(ads_t *self);
 
+/**
+ * @brief Read a single ADS1299 register via the platform SPI interface
+ *
+ * Issues an RREG command and returns the value of the specified register.
+ * This is a platform-specific low-level operation used internally by
+ * `ads_read_reg()`.
+ *
+ * @param self Pointer to the `ads_t` structure
+ * @param reg  Register enumeration (address) to read
+ * @return uint8_t Value read from the register
+ *
+ * @note The device must not be in continuous-conversion mode when called.
+ */
 uint8_t ads_interface_read_reg(ads_t *self, ads_regs_enum_t reg);
 
 #endif /* INCLUDE_ADS1299LIB_INTERFACE_H_ */

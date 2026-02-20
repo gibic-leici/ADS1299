@@ -403,14 +403,7 @@ ads_result_t ads_set_ch_gain(ads_t *self, ads_gain_t *gain) {
  *
  * Controls power-down mode for each channel independently.
  * Set to ADS_CHANNEL_ENABLED (0) to enable or ADS_CHANNEL_DISABLED (1) to power
-down.
- *
-/**
- * @brief Enable or disable individual channels
- *
- * Controls power-down mode for each channel independently.
- * Set to ADS_CHANNEL_ENABLED (0) to enable or ADS_CHANNEL_DISABLED (1) to power
-down.
+ * down the channel.
  *
  * @param self Pointer to ads_t structure
  * @param channel_enable Array of enable/disable flags (one per channel)

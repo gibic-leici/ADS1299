@@ -17,7 +17,13 @@
 #include <assert.h>
 
 /**
- * @brief Enable GPIO Clock
+ * @brief Enable the AHB1 peripheral clock for the given GPIO port
+ *
+ * Enables the corresponding RCC AHB1ENR bit for the provided GPIO port
+ * instance. Supports GPIOA through GPIOI.
+ *
+ * @param port Pointer to the GPIO peripheral base address
+ *             (e.g. GPIOA, GPIOB, ..., GPIOI)
  */
 static void enable_gpio_clock(GPIO_TypeDef *port) {
   if (port == GPIOA)
@@ -41,7 +47,19 @@ static void enable_gpio_clock(GPIO_TypeDef *port) {
 }
 
 /**
- * @brief Configure GPIO Pin
+ * @brief Configure one or more GPIO pins of a port
+ *
+ * Iterates over all set bits in @p pin_mask and applies the same mode,
+ * output type, speed, pull, and alternate-function configuration to each
+ * matching pin.
+ *
+ * @param port     Pointer to the GPIO peripheral (e.g. GPIOA)
+ * @param pin_mask Bitmask of pins to configure (bit N = pin N, e.g. 1<<5)
+ * @param mode     MODER field value: 0=Input, 1=Output, 2=AF, 3=Analog
+ * @param type     OTYPER field value: 0=Push-pull, 1=Open-drain
+ * @param speed    OSPEEDR field value: 0=Low, 1=Medium, 2=High, 3=VeryHigh
+ * @param pull     PUPDR field value: 0=None, 1=Pull-up, 2=Pull-down
+ * @param af       Alternate function index (0-15), used only when mode == 2
  */
 static void config_gpio_pin(GPIO_TypeDef *port, uint32_t pin_mask,
                             uint32_t mode, uint32_t type, uint32_t speed,
@@ -407,6 +425,19 @@ static void init_spi(ads_t *self) {
 #endif                                // SPI_DMA
 }
 
+/**
+ * @brief Configure the EXTI line and NVIC for the DRDY falling-edge interrupt
+ *
+ * Routes the DRDY GPIO pin to the corresponding EXTI line via SYSCFG,
+ * enables the falling-edge trigger, clears any pending flag, and enables
+ * the interrupt in the NVIC at the highest priority.
+ *
+ * @param interface Pointer to STM32_interface_handler_t containing the DRDY
+ *                  GPIO port/pin, EXTI line mask and IRQn number
+ *
+ * @note Enables the SYSCFG peripheral clock as a side effect.
+ * @warning Must be called after the DRDY GPIO pin has been configured as input.
+ */
 void init_drdy_interrupt(STM32_interface_handler_t *interface) {
   assert(interface != NULL);
 
@@ -583,6 +614,20 @@ void ads_interface_spi_tx(ads_t *self, uint8_t *buff, uint16_t len) {
 #endif // FREERTOS
 }
 
+/**
+ * @brief Receive one complete ADS1299 sample frame via SPI (polling mode)
+ *
+ * Reads (num_channels * 3 + 3) bytes by transmitting 0x00 dummy bytes
+ * while clocking in the full sample frame (status word + channel data).
+ * CS is driven LOW before the transfer and HIGH when done.
+ *
+ * @param self Pointer to ads_t structure
+ * @param buff Pointer to buffer large enough to hold the full sample frame
+ *             (ADS_BYTES_PER_SAMPLE bytes)
+ *
+ * @note Thread-safe if FREERTOS is enabled (uses binary semaphore).
+ * @note Intended to be called from the DRDY ISR or equivalent.
+ */
 inline void ads_interface_spi_rx_sample(ads_t *self, uint8_t *buff) {
 
   STM32_interface_handler_t *interface =
@@ -649,19 +694,19 @@ void ads_interface_spi_rx(ads_t *self, uint8_t *buff, uint16_t len) {
 }
 
 /**
- * @brief Transmit data via SPI with byte-level control
+ * @brief Read a single ADS1299 register via SPI (RREG command)
  *
- * Thread-safe SPI transmission using binary semaphore for mutual exclusion.
- * Transmits data byte-by-byte with interleaved delays to meet
- * ADS1299 multi-byte command timing requirements (section 9.5.3.1 of
- * datasheet).
+ * Performs a full RREG SPI transaction: sends the RREG command byte,
+ * a zero-count byte, and a dummy byte, then captures the register value
+ * returned on the third clock cycle.
  *
  * @param self Pointer to ads_t structure
- * @param buff Pointer to transmit buffer
- * @param len Number of bytes to transmit
+ * @param reg  Register enumeration (address) to read
+ * @return uint8_t Value read from the register
  *
- * @note CS pin is controlled: LOW during transmission, HIGH after completion
- * @note Includes 1ms delay between bytes for multi-byte command timing
+ * @note Thread-safe if FREERTOS is enabled (uses binary semaphore).
+ * @note CS pin is controlled: LOW during transaction, HIGH after completion.
+ * @note Includes 1ms inter-byte delay per ADS1299 datasheet §9.5.3.1.
  */
 uint8_t ads_interface_read_reg(ads_t *self, ads_regs_enum_t reg) {
   assert(self != NULL);
@@ -702,6 +747,15 @@ uint8_t ads_interface_read_reg(ads_t *self, ads_regs_enum_t reg) {
 #if SPI_DMA
 uint32_t dummy = 0;
 
+/**
+ * @brief Clear the Transfer Complete (TC) flag for a DMA stream
+ *
+ * Writes to the DMA LIFCR or HIFCR register to clear the TC flag for the
+ * specified stream index (0-7). Streams 0-3 use LIFCR; streams 4-7 use HIFCR.
+ *
+ * @param dma        Pointer to the DMA controller (DMA1 or DMA2)
+ * @param stream_idx Stream index (0 to 7)
+ */
 static void dma_clear_tc(DMA_TypeDef *dma, uint32_t stream_idx) {
   if (stream_idx < 4) {
     // LIFCR: Streams 0-3
@@ -719,6 +773,23 @@ static void dma_clear_tc(DMA_TypeDef *dma, uint32_t stream_idx) {
   }
 }
 
+/**
+ * @brief Stop DMA streams and prepare them for the next SPI RX transfer
+ *
+ * Disables both RX and TX DMA streams, waits for them to stop, reconfigures
+ * the peripheral and memory addresses and transfer length, enables SPI DMA
+ * requests, clears Transfer-Complete flags, and enables the TC interrupt on
+ * the RX stream.
+ *
+ * @param self Pointer to ads_t structure
+ * @param buff Pointer to the destination buffer that DMA will write into
+ * @param len  Number of bytes to transfer
+ *
+ * @note Must be called before enabling the DMA streams with
+ *       ads_interface_spi_rx_sample_DMA().
+ * @note CS is driven LOW by this function; it should be driven HIGH by the
+ *       DMA TC interrupt handler once the transfer is complete.
+ */
 void ads_spi_rx_DMA_stop_and_prepare(ads_t *self, uint8_t *buff, uint16_t len) {
   assert(self != NULL);
   assert(self->interface_Handler != NULL);
@@ -767,6 +838,20 @@ void ads_spi_rx_DMA_stop_and_prepare(ads_t *self, uint8_t *buff, uint16_t len) {
   rx_stream->CR |= DMA_SxCR_TCIE;
 }
 
+/**
+ * @brief Prepare DMA streams for the next full ADS1299 sample frame reception
+ *
+ * Functionally identical to ads_spi_rx_DMA_stop_and_prepare() but the
+ * transfer length is automatically computed from the number of configured
+ * channels (num_channels * 3 + 3). Intended to be called from the DMA TC
+ * interrupt handler to queue the next sample reception.
+ *
+ * @param self Pointer to ads_t structure
+ * @param buff Pointer to the destination buffer for the next sample frame
+ *
+ * @note CS is driven LOW by this function; the caller is responsible for
+ *       driving it HIGH once the DMA transfer completes.
+ */
 void ads_interface_spi_rx_sample_DMA_prepare_next(ads_t *self, uint8_t *buff) {
   assert(self != NULL);
   assert(self->interface_Handler != NULL);
@@ -815,6 +900,19 @@ void ads_interface_spi_rx_sample_DMA_prepare_next(ads_t *self, uint8_t *buff) {
   rx_stream->CR |= DMA_SxCR_TCIE;
 }
 
+/**
+ * @brief Enable DMA streams to start the SPI RX sample transfer
+ *
+ * Drives CS LOW and enables both the RX and TX DMA streams. The actual SPI
+ * transfer begins as soon as the streams are enabled. This function must be
+ * called after ads_spi_rx_DMA_stop_and_prepare() or
+ * ads_interface_spi_rx_sample_DMA_prepare_next() has configured the streams.
+ *
+ * @param self Pointer to ads_t structure
+ *
+ * @note The corresponding DMA TC interrupt handler is responsible for driving
+ *       CS HIGH and processing the received data once the transfer completes.
+ */
 void ads_interface_spi_rx_sample_DMA(ads_t *self) {
   assert(self != NULL);
   assert(self->interface_Handler != NULL);

@@ -13,73 +13,95 @@
  *         marcelo.haberman@ing.unlp.edu.ar - GIBIC (gibic.ar)
  * @date 2026-02-05
  */
-#include <stdint.h>
 #include "ads1299lib_config.h"
 #include "ads1299lib_regs.h"
-
+#include <stdint.h>
 
 #define ADS_MAX_CHANNELS 8
 
 /*******************************
-* RESULT AND STATE ENUMERATIONS*
-*******************************/
+ * RESULT AND STATE ENUMERATIONS*
+ *******************************/
 
-typedef enum {ADS_R_OK, ADS_R_FAIL} ads_result_t;
-typedef enum {ADS_STATE_MIN = 0, ADS_STATE_PRE_INIT=0, ADS_STATE_STOPPED, ADS_STATE_ACQUIRING, ADS_STATE_FAIL, ADS_STATE_MAX = ADS_STATE_FAIL}  ads_state_t;
-typedef enum ads_channel_mode_e {	ADS_CHMOD_MIN = 0,
-							ADS_CHMOD_NORMAL=0,
-							ADS_CHMOD_SHORT=1,
-							ADS_CHMOD_BIAS=2,
-							ADS_CHMOD_VCC=3,
-							ADS_CHMOD_TEMP=4,
-							ADS_CHMOD_TEST=5,
-							ADS_CHMOD_BIASP=6,
-							ADS_CHMOD_BIASN=7,
-							ADS_CHMOD_MAX = 7}	ads_channel_mode_t;
+typedef enum { ADS_R_OK, ADS_R_FAIL } ads_result_t;
+typedef enum {
+  ADS_STATE_MIN = 0,
+  ADS_STATE_PRE_INIT = 0,
+  ADS_STATE_STOPPED,
+  ADS_STATE_ACQUIRING,
+  ADS_STATE_FAIL,
+  ADS_STATE_MAX = ADS_STATE_FAIL
+} ads_state_t;
+typedef enum ads_channel_mode_e {
+  ADS_CHMOD_MIN = 0,
+  ADS_CHMOD_NORMAL = 0,
+  ADS_CHMOD_SHORT = 1,
+  ADS_CHMOD_BIAS = 2,
+  ADS_CHMOD_VCC = 3,
+  ADS_CHMOD_TEMP = 4,
+  ADS_CHMOD_TEST = 5,
+  ADS_CHMOD_BIASP = 6,
+  ADS_CHMOD_BIASN = 7,
+  ADS_CHMOD_MAX = 7
+} ads_channel_mode_t;
 
-typedef enum ads_datarate_e {		ADS_DR_MIN = 0,
-							ADS_DR_16KSPS=0,
-							ADS_DR_8KSPS=1,
-							ADS_DR_4KSPS=2,
-							ADS_DR_2KSPS=3,
-							ADS_DR_1KSPS=4,
-							ADS_DR_500SPS=5,
-							ADS_DR_250SPS=6,
-							ADS_DR_MAX=6}		ads_datarate_t;
+typedef enum ads_datarate_e {
+  ADS_DR_MIN = 0,
+  ADS_DR_16KSPS = 0,
+  ADS_DR_8KSPS = 1,
+  ADS_DR_4KSPS = 2,
+  ADS_DR_2KSPS = 3,
+  ADS_DR_1KSPS = 4,
+  ADS_DR_500SPS = 5,
+  ADS_DR_250SPS = 6,
+  ADS_DR_MAX = 6
+} ads_datarate_t;
 
-typedef enum ads_gain_e {	ADS_GAIN_MIN=0,
-							ADS_GAIN_1=0,
-							ADS_GAIN_2=1,
-							ADS_GAIN_4=2,
-							ADS_GAIN_6=3,
-							ADS_GAIN_8=4,
-							ADS_GAIN_12=5,
-							ADS_GAIN_24=6,
-							ADS_GAIN_MAX=6}		ads_gain_t;
+typedef enum ads_gain_e {
+  ADS_GAIN_MIN = 0,
+  ADS_GAIN_1 = 0,
+  ADS_GAIN_2 = 1,
+  ADS_GAIN_4 = 2,
+  ADS_GAIN_6 = 3,
+  ADS_GAIN_8 = 4,
+  ADS_GAIN_12 = 5,
+  ADS_GAIN_24 = 6,
+  ADS_GAIN_MAX = 6
+} ads_gain_t;
 
-typedef enum ads_channel_state_e {ADS_CHANNEL_ENABLED=0,
-							ADS_CHANNEL_DISABLED=1}	ads_channel_enabled_t;
+typedef enum ads_channel_state_e {
+  ADS_CHANNEL_ENABLED = 0,
+  ADS_CHANNEL_DISABLED = 1
+} ads_channel_enabled_t;
 
-typedef void* ads_interface_t;
+typedef void *ads_interface_t;
 
-
+/**
+ * @struct ads_t
+ * @brief Runtime state structure for an ADS1299 device instance
+ */
 typedef struct {
-	uint8_t num_channels;
-	ads_state_t status;
+  uint8_t num_channels; ///< Number of configured channels (4, 6, or 8)
+  ads_state_t status;   ///< Current device state
 
-	// REGISTER COPIES
-	ads_regs_t registers;
+  // REGISTER COPIES
+  ads_regs_t registers; ///< Shadow copy of all device registers
 
-	// HARDWARE LINK
-	// The library user should associate this pointer with a structure
-	// defined by the user containing hardware-specific details
-	ads_interface_t interface_Handler;
+  // HARDWARE LINK
+  // The library user should associate this pointer with a structure
+  // defined by the user containing hardware-specific details
+  ads_interface_t
+      interface_Handler; ///< Opaque pointer to the platform interface handler
 } ads_t;
 
-typedef struct{
-	ads_channel_enabled_t enabled;
-	ads_channel_mode_t mode;
-	ads_gain_t gain;
+/**
+ * @struct ads_channel_cfg_t
+ * @brief Per-channel configuration used during initialization
+ */
+typedef struct {
+  ads_channel_enabled_t enabled; ///< Channel power state (enabled/disabled)
+  ads_channel_mode_t mode;       ///< Input MUX mode (Normal, Short, Test, etc.)
+  ads_gain_t gain;               ///< PGA gain setting
 } ads_channel_cfg_t;
 
 /**
@@ -87,63 +109,61 @@ typedef struct{
  * @brief Configuration structure for ADS1299 initialization
  */
 typedef struct {
-	uint8_t num_channels;           ///< Number of active channels (4, 6, or 8)
-	ads_datarate_t data_rate;       ///< Data rate for ADC conversions
-	ads_channel_cfg_t channel_config[ADS_MAX_CHANNELS]; ///< Configuration for each channel
-	ads_interface_t interface_Handler; ///< Hardware interface handler
+  uint8_t num_channels;     ///< Number of active channels (4, 6, or 8)
+  ads_datarate_t data_rate; ///< Data rate for ADC conversions
+  ads_channel_cfg_t
+      channel_config[ADS_MAX_CHANNELS]; ///< Configuration for each channel
+  ads_interface_t interface_Handler;    ///< Hardware interface handler
 } ads_init_t;
-
-
-
-
 
 /* 4 Channels */
 #define ADS_N_CH ADS_CONFIG_N_CH
 
 #define ADS_STATUS_BYTES 3
 #define ADS_CHANNEL_BYTES 3
-#define ADS_BYTES_PER_SAMPLE (ADS_N_CH*ADS_CHANNEL_BYTES + ADS_STATUS_BYTES)
-
-
+#define ADS_BYTES_PER_SAMPLE (ADS_N_CH * ADS_CHANNEL_BYTES + ADS_STATUS_BYTES)
 
 #define ADS_REF 4.5f
 
+#define ADS_WRITE_CONFIG1_RESERVED_43 2
+#define ADS_WRITE_CONFIG1_RESERVED_7 1
+#define ADS_WRITE_CONFIG2_RESERVED_3 0
+#define ADS_WRITE_CONFIG2_RESERVED_75 6
+#define ADS_WRITE_CONFIG3_RESERVED_65 3
+#define ADS_WRITE_CONFIG4_RESERVED_0 0
+#define ADS_WRITE_CONFIG4_RESERVED_2 0
+#define ADS_WRITE_CONFIG4_RESERVED_47 0
 
+#define ADS_CLCK_OUTPUT_ENABLED 1
+#define ADS_CLCK_OUTPUT_DISABLED 0
 
-
-
-
-#define ADS_WRITE_CONFIG1_RESERVED_43	2
-#define ADS_WRITE_CONFIG1_RESERVED_7 	1
-#define ADS_WRITE_CONFIG2_RESERVED_3	0
-#define ADS_WRITE_CONFIG2_RESERVED_75 	6
-#define ADS_WRITE_CONFIG3_RESERVED_65 	3
-#define ADS_WRITE_CONFIG4_RESERVED_0 	0
-#define ADS_WRITE_CONFIG4_RESERVED_2 	0
-#define ADS_WRITE_CONFIG4_RESERVED_47 	0
-
-#define ADS_CLCK_OUTPUT_ENABLED				1
-#define ADS_CLCK_OUTPUT_DISABLED			0
-
-#define ADS_DAISY_MODE_ENABLED				0
-#define ADS_DAISY_MODE_DISABLED				1
-
-
+#define ADS_DAISY_MODE_ENABLED 0
+#define ADS_DAISY_MODE_DISABLED 1
 
 #define ADS_ID_DEVICE_ID 3
 #define ADS_ID_NUCH_4 0
 #define ADS_ID_NUCH_6 1
 #define ADS_ID_NUCH_8 2
 
-typedef union{
-	uint8_t bytes[3];
-}ads_sample_ch_t;
+/**
+ * @struct ads_sample_ch_t
+ * @brief Raw 3-byte sample for a single ADS1299 channel
+ *
+ * The three bytes form a 24-bit two's complement value (MSB first).
+ */
+typedef union {
+  uint8_t bytes[3]; ///< Raw bytes: bytes[0] is MSB, bytes[2] is LSB
+} ads_sample_ch_t;
 
-typedef struct{
-	ads_sample_ch_t status;
-	ads_sample_ch_t ch[ADS_N_CH];	
-}ads_sample_pkg_t;
-
+/**
+ * @struct ads_sample_pkg_t
+ * @brief One complete ADS1299 data frame (status word + channel samples)
+ */
+typedef struct {
+  ads_sample_ch_t status; ///< 3-byte status word (LOFF_STATP, LOFF_STATN, GPIO)
+  ads_sample_ch_t ch[ADS_N_CH]; ///< Per-channel sample data (one entry per
+                                ///< configured channel)
+} ads_sample_pkg_t;
 
 /* Commands */
 // System
@@ -211,10 +231,9 @@ void ads_stop(ads_t *self);
  */
 void ads_reset(ads_t *self);
 
-
 /*******************************
-* PARAMETER CONFIGURATION      *
-*******************************/
+ * PARAMETER CONFIGURATION      *
+ *******************************/
 
 /**
  * @brief Set input multiplexer mode for each channel
@@ -229,7 +248,7 @@ void ads_reset(ads_t *self);
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * channel_mode);
+ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t *channel_mode);
 
 /**
  * @brief Enable or disable individual channels
@@ -239,13 +258,15 @@ ads_result_t ads_set_ch_mode(ads_t *self, ads_channel_mode_t * channel_mode);
  * down the channel.
  *
  * @param self Pointer to the `ads_t` structure
- * @param channel_enable Array of enable/disable flags (one per configured channel)
+ * @param channel_enable Array of enable/disable flags (one per configured
+ * channel)
  * @return ads_result_t ADS_R_OK on success, ADS_R_FAIL on failure
  * @warning This function forces the device into the stopped state when
  *          applying the configuration. Ensure stopping conversions is
  *          acceptable before calling.
  */
-ads_result_t ads_set_ch_enabled(ads_t *self, ads_channel_enabled_t* channel_enable);
+ads_result_t ads_set_ch_enabled(ads_t *self,
+                                ads_channel_enabled_t *channel_enable);
 
 /**
  * @brief Set programmable gain amplifier (PGA) for each channel
@@ -321,7 +342,8 @@ void ads_get_ch_gain(ads_t *self, ads_gain_t *gain);
  * obtain the number of channels and revision ID.
  *
  * @param self Pointer to the `ads_t` structure
- * @return ADS_ID_reg_t Device ID register value containing DEV_ID, NU_CH and REV_ID
+ * @return ADS_ID_reg_t Device ID register value containing DEV_ID, NU_CH and
+ * REV_ID
  * @note Performs an SPI read; may interrupt conversions.
  */
 ADS_ID_reg_t ads_get_ID(ads_t *self);
@@ -342,7 +364,7 @@ ADS_ID_reg_t ads_get_ID(ads_t *self);
  *          the SPI interface to stop. Ensure the device is stopped or that
  *          interruption is acceptable before calling.
  */
-void ads_write_reg (ads_t *self, ads_regs_enum_t reg, uint8_t value);
+void ads_write_reg(ads_t *self, ads_regs_enum_t reg, uint8_t value);
 
 /**
  * @brief Read ADS1299 register
@@ -363,8 +385,5 @@ void ads_write_reg (ads_t *self, ads_regs_enum_t reg, uint8_t value);
  *          interruption is acceptable before calling.
  */
 uint8_t ads_read_reg(ads_t *self, ads_regs_enum_t reg);
-
-
-
 
 #endif
