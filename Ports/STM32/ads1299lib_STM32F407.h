@@ -17,16 +17,14 @@
 #define DRDY_IT 1
 #define FREERTOS 0
 
-#include "stm32f4xx_ll_gpio.h"
-#include "stm32f4xx_ll_spi.h"
-
+#include "stm32f4xx.h"
 
 #if SPI_DMA
-#include "stm32f4xx_ll_dma.h"
+// No specific include needed for DMA registers in CMSIS
 #endif // SPI_DMA
 
 #if DRDY_IT
-#include "stm32f4xx_ll_exti.h"
+// No specific include needed for EXTI registers in CMSIS
 #endif // DRDY_IT
 
 #if FREERTOS
