@@ -14,7 +14,7 @@
 #define PORTS_STM32_ADS1299LIB_STM32_H_
 
 #define SPI_DMA 0
-#define DRDY_IT 0
+#define DRDY_IT 1
 #define FREERTOS 0
 
 #include "stm32f4xx.h"
