@@ -441,6 +441,7 @@ static void init_spi(ads_t *self) {
 void init_drdy_interrupt(STM32_interface_handler_t *interface) {
   assert(interface != NULL);
 
+#if DRDY_IT
   // Configure EXTI line for DRDY pin (falling edge detection)
   // Map GPIO port/pin to SYSCFG EXTICR so EXTI line is routed correctly.
   RCC->APB2ENR |= RCC_APB2ENR_SYSCFGEN;
@@ -471,6 +472,7 @@ void init_drdy_interrupt(STM32_interface_handler_t *interface) {
   NVIC_SetPriority(interface->drdy_EXTI_IRQn,
                    NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 0, 0));
   NVIC_EnableIRQ(interface->drdy_EXTI_IRQn);
+#endif //DRDY_IT
 }
 
 /**
