@@ -8,7 +8,7 @@ ADS1299 driver library for microcontrollers. This project provides a compact, we
 - Per-channel configuration (gain, input multiplexer, enable/disable)
 - Data rate configuration and readback
 - Register read/write helpers with verification
-- STM32F4-specific interface implementation (SPI, DMA, EXTI)
+- STM32F4-specific interface implementation (SPI, DMA, EXTI) using pure CMSIS definitions
 - Thread-safe SPI access (semaphores)
 - Doxygen-style documentation throughout the codebase
 
@@ -26,7 +26,7 @@ cfg.data_rate = ADS_DR_1KSPS;
 cfg.interface_Handler = &hw_interface; // platform-specific handler
 // configure channel settings in cfg.channel_config[]
 
-if (ads_init(&device, &cfg) != R_OK) {
+if (ads_init(&device, &cfg) != ADS_R_OK) {
     // handle initialization failure
 }
 ads_start(&device);
@@ -45,11 +45,17 @@ For full function descriptions and signatures, see `Include/ads1299lib.h` and th
 
 ## Configuration and Porting Notes
 
-- The STM32F4 port (`Ports/STM32`) uses LL drivers + CMSIS-RTOS primitives. Adapt the interface handler for other platforms.
+- The STM32F4 port (`Ports/STM32`) uses pure CMSIS register definitions without ST HAL or LL dependencies. Adapt the interface handler for other platforms.
 - When changing configuration registers at runtime, the API forces the device into the stopped state — ensure this is acceptable for your application.
 - Some register reads/writes will call `ads_interface_stop()` and may interrupt conversions.
 
 ## Examples
+
+The library includes three examples for the STM32F4 port demonstrating different acquisition methods:
+
+- [STM32F4xx Polling Example](examples/STM32F4xx_polling/) - Basic polling method
+- [STM32F4xx Interrupt Example](examples/STM32F4xx_IT/) - Data ready (DRDY) interrupt method
+- [STM32F4xx Interrupt & DMA Example](examples/STM32F4xx_IT_DMA/) - Interrupt driven with DMA transfers for high throughput and low CPU usage
 
 See `USAGE_GUIDE.md` for practical usage examples, interrupt usage, DMA configuration, and troubleshooting tips.
 
@@ -69,6 +75,12 @@ Marcelo Haberman
 - Organization: GIBIC (gibic.ar)
 
 
+## How to Cite
+
+If you use this tool in your research, publications, or reports, please cite it as follows:
+
+> GIBIC Group at LEICI Research Institute (UNLP-CONICET) (2026). ADS1299 Library
+
 ## Generating HTML documentation (Doxygen) ✅
 
 You can generate the HTML documentation from the Doxygen comments included in the code.
@@ -82,3 +94,4 @@ Output will be placed at `docs/doxygen/html/index.html`.
 
 Tip: If you don't have Doxygen installed, visit https://www.doxygen.nl/ for installers and documentation.
 
+© 2026 GIBIC Group at LEICI Research Institute (UNLP-CONICET)

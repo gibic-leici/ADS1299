@@ -31,17 +31,17 @@ ads_t ads_device;
 STM32_interface_handler_t hw_interface = {
     .spi = SPI2,
     .dma = DMA1,
-    .spi_rx_dma_stream = LL_DMA_STREAM_3,
-    .spi_tx_dma_stream = LL_DMA_STREAM_4,
+    .spi_rx_dma_stream = 3,
+    .spi_tx_dma_stream = 4,
     .cs_port = GPIOC,
-    .cs_pin = GPIO_PIN_5,
+    .cs_pin = (1 << 5),
     .prst_port = GPIOB,
-    .prst_pin = GPIO_PIN_0,
+    .prst_pin = (1 << 0),
     .drdy_port = GPIOB,
-    .drdy_pin = GPIO_PIN_1,
+    .drdy_pin = (1 << 1),
     .drdy_EXTI_IRQn = EXTI4_IRQn,
-    .drdy_EXTI_line = LL_EXTI_LINE_4,
-    .delay = HAL_Delay,  // Provide your delay function
+    .drdy_EXTI_line = (1 << 4),
+    .delay = my_delay_ms,  // Provide your delay function
     .mutex = NULL  // Will be created by ads_interface_init()
 };
 
@@ -61,7 +61,7 @@ for(int i = 0; i < 8; i++) {
 
 // Perform initialization
 ads_result_t result = ads_init(&ads_device, &init_config);
-if(result == R_OK) {
+if(result == ADS_R_OK) {
     printf("ADS1299 initialized successfully\n");
 } else {
     printf("ADS1299 initialization failed\n");
@@ -71,8 +71,7 @@ if(result == R_OK) {
 
 ### Initialization States
 
-```
-UNINITIALIZED (sin_iniciar)
+UNINITIALIZED (ADS_STATE_PRE_INIT)
     ↓
 HARDWARE RESET
     ↓
@@ -82,11 +81,11 @@ CONFIGURATION WRITING
     ↓
 CONFIGURATION VERIFICATION
     ↓
-STOPPED (detenido) ← Ready to start acquisition
+STOPPED (ADS_STATE_STOPPED) ← Ready to start acquisition
     ↓
 START COMMAND
     ↓
-ACQUIRING (adquiriendo) ← Data ready on DRDY interrupt
+ACQUIRING (ADS_STATE_ACQUIRING) ← Data ready on DRDY interrupt
 ```
 
 ---
@@ -99,7 +98,7 @@ ACQUIRING (adquiriendo) ← Data ready on DRDY interrupt
 // Change sampling rate (device must be stopped)
 ads_result_t result = ads_set_data_rate(&ads_device, ADS_DR_500SPS);
 
-if(result == R_OK) {
+if(result == ADS_R_OK) {
     printf("Data rate changed to 500 SPS\n");
 } else {
     printf("Failed to change data rate\n");
@@ -132,7 +131,7 @@ ads_gain_t gains[8] = {
 
 ads_result_t result = ads_set_ch_gain(&ads_device, gains);
 
-if(result == R_OK) {
+if(result == ADS_R_OK) {
     printf("Channel gains configured\n");
 }
 
@@ -197,7 +196,7 @@ ads_set_ch_mode(&ads_device, ch_mode);
 // Start continuous data acquisition
 ads_start(&ads_device);
 
-if(ads_device.status == adquiriendo) {
+if(ads_device.status == ADS_STATE_ACQUIRING) {
     printf("ADC acquiring data\n");
 }
 // Data now becomes available on DRDY pin interrupt
@@ -209,7 +208,7 @@ if(ads_device.status == adquiriendo) {
 // Stop data acquisition
 ads_stop(&ads_device);
 
-if(ads_device.status == detenido) {
+if(ads_device.status == ADS_STATE_STOPPED) {
     printf("ADC stopped\n");
 }
 // Device ready for reconfiguration
@@ -220,25 +219,16 @@ if(ads_device.status == detenido) {
 ```c
 // Check device state
 switch(ads_device.status) {
-    case sin_iniciar:
+    case ADS_STATE_PRE_INIT:
         printf("Device not initialized\n");
         break;
-    case iniciado_default:
-        printf("Device initialized with defaults\n");
-        break;
-    case conf_programada:
-        printf("Configuration programmed\n");
-        break;
-    case adquiriendo:
-        printf("Device acquiring data\n");
-        break;
-    case detenido:
+    case ADS_STATE_STOPPED:
         printf("Device stopped\n");
         break;
-    case adquiriendo_test:
-        printf("Device acquiring test signal\n");
+    case ADS_STATE_ACQUIRING:
+        printf("Device acquiring data\n");
         break;
-    case falla:
+    case ADS_STATE_FAIL:
         printf("Device error state\n");
         break;
 }
@@ -282,8 +272,8 @@ printf("Device ID - Dev: %d, Channels: %d, Rev: %d\n",
 void EXTI4_IRQHandler(void)
 {
     // Clear interrupt flag
-    if(LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_4) != RESET) {
-        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_4);
+    if((EXTI->PR & EXTI_PR_PR4) != 0) {
+        EXTI->PR = EXTI_PR_PR4;
         
         // Read ADC data
         uint8_t adc_frame[ADS_BYTES_PER_SAMPLE];  // 27 bytes for 8 channels (3 status + 8*3 data)
@@ -325,8 +315,8 @@ void EXTI4_IRQHandler(void)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
-    if(LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_4) != RESET) {
-        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_4);
+    if((EXTI->PR & EXTI_PR_PR4) != 0) {
+        EXTI->PR = EXTI_PR_PR4;
         
         // Signal main task that data is ready
         xSemaphoreGiveFromISR(data_ready_semaphore, &xHigherPriorityTaskWoken);
@@ -367,9 +357,9 @@ void adc_task(void *arguments)
 ```c
 ads_result_t result = ads_set_ch_gain(&ads_device, gains);
 
-if(result == R_OK) {
+if(result == ADS_R_OK) {
     printf("Operation successful\n");
-} else if(result == R_FAIL) {
+} else if(result == ADS_R_FAIL) {
     printf("Operation failed\n");
     printf("Device status: %d\n", ads_device.status);
     
@@ -401,7 +391,7 @@ if(data_rate >= ADS_DR_MIN && data_rate <= ADS_DR_MAX) {
 // After writing configuration, device automatically verifies
 // If verification fails, status becomes 'falla'
 
-if(ads_device.status == falla) {
+if(ads_device.status == ADS_STATE_FAIL) {
     printf("Configuration verification failed\n");
     printf("Possible causes:\n");
     printf("- SPI communication error\n");
@@ -461,8 +451,8 @@ void EXTI4_IRQHandler(void)
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     uint8_t adc_frame[ADS_BYTES_PER_SAMPLE];
     
-    if(LL_EXTI_IsActiveFlag_0_31(LL_EXTI_LINE_4) != RESET) {
-        LL_EXTI_ClearFlag_0_31(LL_EXTI_LINE_4);
+    if((EXTI->PR & EXTI_PR_PR4) != 0) {
+        EXTI->PR = EXTI_PR_PR4;
         
         ads_interface_spi_rx(&ads_device, adc_frame, ADS_BYTES_PER_SAMPLE);
         
@@ -500,7 +490,8 @@ void data_processing_task(void *arg)
 // Fclk/8 = 10.5 MHz (acceptable)
 // Fclk/16 = 5.25 MHz (safer)
 
-LL_SPI_SetBaudRatePrescaler(SPI2, LL_SPI_BAUDRATE_PRESCALER_8);  // 10.5 MHz
+// Example for Fclk/8:
+SPI2->CR1 = (SPI2->CR1 & ~SPI_CR1_BR_Msk) | SPI_CR1_BR_1;  // 10.5 MHz
 ```
 
 ### 2. **Use DMA for High-Throughput Data**
@@ -562,27 +553,27 @@ NVIC_SetPriority(EXTI4_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(), 1, 
 printf("Checking hardware...\n");
 
 // 1. Verify SPI is enabled
-printf("SPI enabled: %d\n", LL_SPI_IsEnabled(ADS_SPI));
+printf("SPI enabled: %ld\n", (SPI2->CR1 & SPI_CR1_SPE));
 
 // 2. Check clock speed (should be < 10 MHz)
-printf("SPI clock divider: %d\n", LL_SPI_GetBaudRatePrescaler(ADS_SPI));
+printf("SPI clock divider bits: %ld\n", (SPI2->CR1 & SPI_CR1_BR_Msk) >> SPI_CR1_BR_Pos);
 
 // 3. Verify pins
-printf("CS pin state: %d\n", LL_GPIO_IsInputPinSet(CS_GPIO_Port, CS_Pin));
-printf("RESET pin state: %d\n", LL_GPIO_IsInputPinSet(PRST_GPIO_Port, PRST_Pin));
+printf("CS pin state: %ld\n", (GPIOC->IDR & (1 << 5)) != 0);
+printf("RESET pin state: %ld\n", (GPIOB->IDR & (1 << 0)) != 0);
 
 // 4. Manual reset test
-LL_GPIO_ResetOutputPin(PRST_GPIO_Port, PRST_Pin);
-HAL_Delay(100);
-LL_GPIO_SetOutputPin(PRST_GPIO_Port, PRST_Pin);
-HAL_Delay(1000);
+GPIOB->BSRR = (1 << 16); // Set RESET pin LOW (assuming bit 0)
+my_delay_ms(100);
+GPIOB->BSRR = (1 << 0);  // Set RESET pin HIGH
+my_delay_ms(1000);
 printf("Reset completed\n");
 ```
 
 ### Issue: Configuration Verification Fails
 
 ```c
-// Symptoms: ads_device.status == falla
+// Symptoms: ads_device.status == ADS_STATE_FAIL
 // Possible causes:
 // 1. SPI timing issue
 // 2. Multi-byte command timing violation
@@ -609,11 +600,17 @@ printf("Reset completed\n");
 // 1. Verify EXTI configuration in CubeMX
 // 2. Check DRDY pin state during normal operation
 // 3. Verify EXTI line matches actual pin
-printf("DRDY pin state: %d\n", LL_GPIO_IsInputPinSet(GPIOB, GPIO_PIN_1));
+printf("DRDY pin state: %ld\n", (GPIOB->IDR & (1 << 1)) != 0);
 
 // 4. If pin never goes LOW, ADS1299 not sending data
-// Verify ads_device.status == adquiriendo
+// Verify ads_device.status == ADS_STATE_ACQUIRING
 ```
 
 ---
 **For more information, refer to the ADS1299 datasheet and STM32F4 reference manual.**
+
+## How to Cite
+
+If you use this tool in your research, publications, or reports, please cite it as follows:
+
+> GIBIC Group at LEICI Research Institute (UNLP-CONICET) (2026). ADS1299 Library
