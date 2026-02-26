@@ -217,6 +217,8 @@ ads_result_t ads_set_config(ads_t *self) {
 
   assert(self != NULL);
 
+  ads_stop(self);
+
   ads_write_reg(self, ADS_CONFIG1, self->registers.config1.byte);
   ads_write_reg(self, ADS_CONFIG2, self->registers.config2.byte);
   ads_write_reg(self, ADS_CONFIG3, self->registers.config3.byte);
